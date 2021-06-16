@@ -14,29 +14,45 @@ import tensorflow as tf
 from tensorflow.keras import Model
 from tensorflow.keras.layers import Dense, InputLayer,  BatchNormalization
 from keras.models import Sequential
+from sklearn.model_selection import train_test_split
 
 # read data
 train_data=pd.read_csv('nsl-kdd/KDDTrain+.txt', sep = ',', error_bad_lines=False, header=None)
-#test_data=pd.read_csv('nsl-kdd/KDDTest+.txt', sep = ',', error_bad_lines=False, header=None)
+test_data=pd.read_csv('nsl-kdd/KDDTest+.txt', sep = ',', error_bad_lines=False, header=None)
+train_labels = train_data.iloc[:,41]
+train_data = train_data.iloc[:,:-2] #Remove the last two columns from train ds
+test_ds = test_data.iloc[:,:-2] #Remove the last two columns from train ds
+
+
 encoder = LabelEncoder()
+
+
+
 train_data[1]= encoder.fit_transform(train_data.iloc[:,1])
 train_data[2]= encoder.fit_transform(train_data.iloc[:,2])
 train_data[3]= encoder.fit_transform(train_data.iloc[:,3])
-train_ds = train_data.iloc[:,:-2] #Remove the last two columns from train ds
+# test_labels = test_data.iloc[:,41]
+# test_encoded_labels = encoder.fit_transform(test_labels)
 
-train_labels = train_data.iloc[:,41]
-encoded_labels = encoder.fit_transform(train_labels)
+# test_data[1]= encoder.fit_transform(test_data.iloc[:,1])
+# test_data[2]= encoder.fit_transform(test_data.iloc[:,2])
+# test_data[3]= encoder.fit_transform(test_data.iloc[:,3])
 
-#Scale and Normalizer
-normalizer = Normalizer()
-train_X = normalizer.fit_transform(train_ds)
+X_train, X_test, y_train, y_test = train_test_split(train_data, train_labels, test_size=0.33, random_state=42)
+
+
+encoded_labels = encoder.fit_transform(y_train)
+
+
+test_encoded_labels = encoder.fit_transform(y_test)
+
+
 
 class DNNIntrusion(Model):
     
     def __init__(self, data, name):
         super(DNNIntrusion,self).__init__(name=name)
         self.data = data
-        #self.inputLayer = InputLayer(input_shape=(125973,))
         self.dense1 = Dense(1024, name="dense1")
         self.dense2 = Dense(1024,  activation="relu", name="dense2")
         self.dense3 = Dense(512, activation="relu", name="dense3")
@@ -46,21 +62,23 @@ class DNNIntrusion(Model):
         self.batch = BatchNormalization()
         
     def call(self, x):
-        #x = self.inputLayer(x)
         x = self.dense1(x)
-        
-        x = self.relu(x)
         x = self.batch(x)
         x = self.dense2(x)
-        x = self.batch(x)
-        x = self.dense2(x)
-        x = self.batch(x)
-        x = self.dense2(x)
+        #x = self.batch(x)
+        # x = self.dense2(x)
+        # x = self.batch(x)
+        # x = self.dense2(x)
+        # x = self.batch(x)
         x = self.dense3(x)
         x = self.dense4(x)
+        x = self.dense5(x)
+        return x
 
-        return self.dense5(x)
-
+#Scale and Normalizer
+normalizer = Normalizer()
+train_X = normalizer.fit_transform(X_train)
+test_X = normalizer.fit_transform(X_test)
 epochs = 10
 #Split data
 
@@ -68,11 +86,14 @@ x_train = tf.convert_to_tensor(train_X)
 y_train = np.reshape(encoded_labels,(-1,1))
 y_train = tf.convert_to_tensor(y_train)
 
+x_test = tf.convert_to_tensor(test_X)
+y_test = np.reshape(test_encoded_labels,(-1,1))
+y_test = tf.convert_to_tensor(y_test)
 cnn_model = DNNIntrusion(x_train,name="intrusion")
 
 loss_object = tf.keras.losses.SparseCategoricalCrossentropy(from_logits=True)
 
-optimizer = tf.keras.optimizers.Adam()
+optimizer = tf.keras.optimizers.Adam(0.001)
 
 ## Metrics
 train_loss = tf.keras.metrics.Mean(name='train_loss')
@@ -81,17 +102,20 @@ train_accuracy = tf.keras.metrics.SparseCategoricalAccuracy(name='train_accuracy
 test_loss = tf.keras.metrics.Mean(name='test_loss')
 test_accuracy = tf.keras.metrics.SparseCategoricalAccuracy(name='test_accuracy')
 
-layer = []
 def print_layer_variables(model):
-    tes = model.trainable_variables[6]
+    nodes = model.trainable_variables[8]
     #print(model.trainable_variables)
     try:
-        print(tes,"test")
-        results = fit_distribution(tes[0].numpy(),0.99,0.01)
-
-        print(results.iloc[0]['chi_square'], results.iloc[0]['Distribution'])
-        results = fit_distribution(tes[1].numpy(),0.99,0.01)
-        print(results.iloc[0]['chi_square'], results.iloc[0]['Distribution'])
+        for i in range(256):
+          results = fit_distribution(nodes[i].numpy(),0.99,0.01)
+          print('{}'.format(i+1),results.iloc[0]['chi_square'], results.iloc[0]['Distribution'])
+        # results = fit_distribution(tes[1].numpy(),0.99,0.01)
+        # print(results.iloc[0]['chi_square'], results.iloc[0]['Distribution'])
+        # results = fit_distribution(tes[2].numpy(),0.99,0.01)
+        # print(results.iloc[0]['chi_square'], results.iloc[0]['Distribution'])
+        # results = fit_distribution(tes[3].numpy(),0.99,0.01)
+        # print(results.iloc[0]['chi_square'], results.iloc[0]['Distribution'])        
+        # print(tes[255].numpy())
     except NotImplementedError:
         pass
     except ValueError:
@@ -102,11 +126,11 @@ def print_layer_variables(model):
 
 
 @tf.function
-def train_step(trainDS, labels,training=True):
+def train_step(trainDS, labels):
   
   with tf.GradientTape() as tape:
 
-    predictions = cnn_model(trainDS)
+    predictions = cnn_model(trainDS,training=True)
     loss = loss_object(labels, predictions)
   
   gradients = tape.gradient(loss, cnn_model.trainable_variables)
@@ -115,6 +139,17 @@ def train_step(trainDS, labels,training=True):
   
   train_loss(loss)
   train_accuracy(labels, predictions)
+  
+@tf.function
+def test_step(test_data, labels):
+  # training=False is only needed if there are layers with different
+  # behavior during training versus inference (e.g. Dropout).
+  predictions = cnn_model(test_data, training=False)
+  t_loss = loss_object(labels, predictions)
+
+  test_loss(t_loss)
+  test_accuracy(labels, predictions)
+
   print_layer_variables(cnn_model)
 # current_time = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
 # train_log_dir = 'logs/gradient_tape/' + current_time + '/train'
@@ -123,7 +158,7 @@ def train_step(trainDS, labels,training=True):
 # test_summary_writer = tf.summary.create_file_writer(test_log_dir)
   
   
-EPOCHS = 1
+EPOCHS = 2
 
 
 for epoch in range(EPOCHS):
@@ -140,15 +175,19 @@ for epoch in range(EPOCHS):
   #   tf.summary.scalar('accuracy', train_accuracy.result(), step=epoch)
   ''' To be Implemented'''
   #for test_images, test_labels in test_ds:
-  #  test_step(test_images, test_labels)
+  test_step(x_test, y_test)
 
   print(
     f'Epoch {epoch + 1}: '
     f'Loss: {train_loss.result()}, '
     f'Accuracy: {train_accuracy.result() * 100}, '
+    f'Test Loss: {test_loss.result()}, '
+    f'Test Accuracy: {test_accuracy.result() * 100}'
+
   )
-  
   print_layer_variables(cnn_model)
+  
+
   
 class RNNIntrusion(Model):
     def __init__(self, data):

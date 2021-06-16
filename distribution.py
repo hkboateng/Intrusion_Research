@@ -19,21 +19,20 @@ import statsmodels.api as sm
 import seaborn as sns
 import pylab as py 
 from scipy import stats
-vehicle_df = pd.read_csv('vehicles.csv')
-
+# vehicle_df = pd.read_csv('vehicles.csv')
 dist_names = ['weibull_min','norm','weibull_max','beta','invgauss','uniform','gamma','expon','lognorm','pearson3','triang']
-columns = ['id','price','year','manufacturer','condition','odometer']
-vehicle_data = vehicle_df[columns]
+# columns = ['id','price','year','manufacturer','condition','odometer']
+# vehicle_data = vehicle_df[columns]
 
 
-vehicle_data.isna().sum()
+# vehicle_data.isna().sum()
 
 def standarise(column,pct,pct_lower):
     sc = StandardScaler() 
    # x_y = vehicle_data[column][vehicle_data[column].notnull()]
     y = column #vehicle_data[column][vehicle_data[column].notnull()].to_list()
     y.sort()
-    print("Shape of Tensor: ",y.shape)
+    #print("Shape of Tensor: ",y.shape)
     len_y = len(y)
     y = y[int(pct_lower * len_y):int(len_y * pct)]
     len_y = len(y)
