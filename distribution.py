@@ -11,6 +11,7 @@ import numpy as np
 # from mlutils import dataset, connector
 import scipy.stats
 from scipy.stats import *
+from scipy.stats import lognorm, gamma,beta,exponnorm
 from sklearn.preprocessing import StandardScaler
 import math
 import matplotlib.pyplot as plt
@@ -32,7 +33,6 @@ def standarise(column,pct,pct_lower):
    # x_y = vehicle_data[column][vehicle_data[column].notnull()]
     y = column #vehicle_data[column][vehicle_data[column].notnull()].to_list()
     y.sort()
-    #print("Shape of Tensor: ",y.shape)
     len_y = len(y)
     y = y[int(pct_lower * len_y):int(len_y * pct)]
     len_y = len(y)
@@ -73,6 +73,7 @@ def fit_distribution(column,pct,pct_lower):
         # Chi-square Statistics
         expected_frequency = np.array(expected_frequency) * size
         cum_expected_frequency = np.cumsum(expected_frequency)
+
         ss = sum (((cum_expected_frequency - cum_observed_frequency) ** 2) / cum_observed_frequency)
         chi_square_statistics.append(ss)
 
@@ -83,15 +84,87 @@ def fit_distribution(column,pct,pct_lower):
     results['chi_square'] = chi_square_statistics
     results.sort_values(['chi_square'], inplace=True)
 
-
     #print ('\nDistributions listed by Betterment of fit:')
     #print ('............................................')
     #print (results)
     #print(results[0])
     return results
 
-# x_y,results = fit_distribution('year',0.99,0.01)
+def calculate_dis_props(dist_data):
+    result = fit_distribution(dist_data, 0.99, 0.01)
+    dist_name = result.iloc[0]['Distribution']
 
+    distribution = pd.DataFrame()
+    distribution['Type of Distribution'] = [dist_name]
+    if dist_name == "lognorm":
+        mean, var, skew, kurt = lognorm.stats(dist_data, moments='mvsk')
+        distribution['Mean'] = [mean]
+        distribution['Standard Deviation'] = [np.sqrt(var)]
+        distribution['Skewness'] = [skew]
+        distribution['Kurtosis'] = [kurt]
+    elif dist_name == "gamma":
+        mean, var, skew, kurt = gamma.stats(dist_data, moments='mvsk')
+        distribution['Mean'] = [mean]
+        distribution['Standard Deviation'] = [np.sqrt(var)]
+        distribution['Skewness'] = [skew]
+        distribution['Kurtosis'] = [kurt]
+    elif dist_name == 'weibull_min':
+        mean, var, skew, kurt = weibull_min.stats(dist_data, moments='mvsk')
+        distribution['Mean'] = [mean]
+        distribution['Standard Deviation'] = [np.sqrt(var)]
+        distribution['Skewness'] = [skew]
+        distribution['Kurtosis'] = [kurt]
+    elif dist_name == 'norm':
+        mean, var, skew, kurt = norm.stats(dist_data, moments='mvsk')
+        distribution['Mean'] = [mean]
+        distribution['Standard Deviation'] = [var]
+        distribution['Skewness'] = [skew]
+        distribution['Kurtosis'] = [kurt]
+    elif dist_name == 'weibull_max':
+        mean, var, skew, kurt = weibull_max.stats(dist_data, moments='mvsk')
+        distribution['Mean'] = [mean]
+        distribution['Standard Deviation'] = [var]
+        distribution['Skewness'] = [skew]
+        distribution['Kurtosis'] = [kurt]
+    elif dist_name == "beta":
+        mean, var, skew, kurt = beta.stats(dist_data,1, moments='mvsk')
+        distribution['Mean'] = [mean]
+        distribution['Standard Deviation'] = [var]
+        distribution['Skewness'] = [skew]
+        distribution['Kurtosis'] = [kurt]
+    elif dist_name == 'invgauss':
+        mean, var, skew, kurt = invgauss.stats(dist_data, moments='mvsk')
+        distribution['Mean'] = [mean]
+        distribution['Standard Deviation'] = [var]
+        distribution['Skewness'] = [skew]
+        distribution['Kurtosis'] = [kurt]
+    elif dist_name == 'expon':
+        mean, var, skew, kurt = expon.stats(dist_data, moments='mvsk')
+        distribution['Mean'] = [mean]
+        distribution['Standard Deviation'] = [var]
+        distribution['Skewness'] = [skew]
+        distribution['Kurtosis'] = [kurt]
+    elif dist_name == 'uniform':
+        mean, var, skew, kurt = uniform.stats(dist_data, moments='mvsk')
+        distribution['Mean'] = [mean]
+        distribution['Standard Deviation'] = [var]
+        distribution['Skewness'] = [skew]
+        distribution['Kurtosis'] = [kurt]
+    elif dist_name == 'pearson3':
+        mean, var, skew, kurt = pearson3.stats(dist_data, moments='mvsk')
+        distribution['Mean'] = [mean]
+        distribution['Standard Deviation'] = [np.sqrt(var)]
+        distribution['Skewness'] = [skew]
+        distribution['Kurtosis'] = [kurt]
+    elif dist_name == 'triang':
+        mean, var, skew, kurt = triang.stats(dist_data, moments='mvsk')
+        distribution['Mean'] = [mean]
+        distribution['Standard Deviation'] = [np.sqrt(var)]
+        distribution['Skewness'] = [skew]
+        distribution['Kurtosis'] = [kurt]  
+    return distribution,result
+# x_y,results = fit_distribution('year',0.99,0.01)
+dist_names = ['weibull_min','norm','weibull_max','beta','invgauss','uniform','gamma','expon','lognorm','pearson3','triang']
 
 # results_sort = results['chi_square']
 # results_arr = np.array(results_sort)

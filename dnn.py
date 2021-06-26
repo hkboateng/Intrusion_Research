@@ -4,7 +4,7 @@ Created on Mon May 31 16:19:25 2021
 
 @author: Hubert Kyeremateng-Boateng
 """
-from distribution import fit_distribution
+from distribution import fit_distribution, calculate_dis_props
 import numpy as np
 import pandas as pd
 import datetime
@@ -38,7 +38,7 @@ train_data[3]= encoder.fit_transform(train_data.iloc[:,3])
 # test_data[2]= encoder.fit_transform(test_data.iloc[:,2])
 # test_data[3]= encoder.fit_transform(test_data.iloc[:,3])
 
-X_train, X_test, y_train, y_test = train_test_split(train_data, train_labels, test_size=0.33, random_state=42)
+X_train, X_test, y_train, y_test = train_test_split(train_data, train_labels, test_size=0.3, random_state=42)
 
 
 encoded_labels = encoder.fit_transform(y_train)
@@ -65,9 +65,9 @@ class DNNIntrusion(Model):
         x = self.dense1(x)
         x = self.batch(x)
         x = self.dense2(x)
-        #x = self.batch(x)
-        # x = self.dense2(x)
-        # x = self.batch(x)
+        x = self.batch(x)
+        x = self.dense2(x)
+        x = self.batch(x)
         # x = self.dense2(x)
         # x = self.batch(x)
         x = self.dense3(x)
@@ -79,7 +79,7 @@ class DNNIntrusion(Model):
 normalizer = Normalizer()
 train_X = normalizer.fit_transform(X_train)
 test_X = normalizer.fit_transform(X_test)
-epochs = 10
+epochs = 1
 #Split data
 
 x_train = tf.convert_to_tensor(train_X)
@@ -102,11 +102,13 @@ train_accuracy = tf.keras.metrics.SparseCategoricalAccuracy(name='train_accuracy
 test_loss = tf.keras.metrics.Mean(name='test_loss')
 test_accuracy = tf.keras.metrics.SparseCategoricalAccuracy(name='test_accuracy')
 
+predict= []
 def print_layer_variables(model):
+    
     nodes = model.trainable_variables[8]
-    #print(model.trainable_variables)
+
     try:
-        for i in range(256):
+        for i in range(1):
           results = fit_distribution(nodes[i].numpy(),0.99,0.01)
           print('{}'.format(i+1),results.iloc[0]['chi_square'], results.iloc[0]['Distribution'])
         # results = fit_distribution(tes[1].numpy(),0.99,0.01)
@@ -132,11 +134,12 @@ def train_step(trainDS, labels):
 
     predictions = cnn_model(trainDS,training=True)
     loss = loss_object(labels, predictions)
+    
   
   gradients = tape.gradient(loss, cnn_model.trainable_variables)
 
   optimizer.apply_gradients(zip(gradients, cnn_model.trainable_variables))
-  
+  print_layer_variables(cnn_model)
   train_loss(loss)
   train_accuracy(labels, predictions)
   
@@ -144,13 +147,13 @@ def train_step(trainDS, labels):
 def test_step(test_data, labels):
   # training=False is only needed if there are layers with different
   # behavior during training versus inference (e.g. Dropout).
-  predictions = cnn_model(test_data, training=False)
+  predictions = cnn_model(test_data)
   t_loss = loss_object(labels, predictions)
 
   test_loss(t_loss)
   test_accuracy(labels, predictions)
 
-  print_layer_variables(cnn_model)
+  
 # current_time = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
 # train_log_dir = 'logs/gradient_tape/' + current_time + '/train'
 # test_log_dir = 'logs/gradient_tape/' + current_time + '/test'
@@ -158,9 +161,8 @@ def test_step(test_data, labels):
 # test_summary_writer = tf.summary.create_file_writer(test_log_dir)
   
   
-EPOCHS = 2
-
-
+EPOCHS = 10
+dist_list = []
 for epoch in range(EPOCHS):
   # Reset the metrics at the start of the next epoch
   train_loss.reset_states()
@@ -170,22 +172,43 @@ for epoch in range(EPOCHS):
   
   #fit_distribution(X_train,0.99,0.01)
   train_step(x_train, y_train)
-  # with train_summary_writer.as_default():
-  #   tf.summary.scalar('loss', train_loss.result(), step=epoch)
-  #   tf.summary.scalar('accuracy', train_accuracy.result(), step=epoch)
-  ''' To be Implemented'''
-  #for test_images, test_labels in test_ds:
-  test_step(x_test, y_test)
+  # with tf.GradientTape() as tape:
 
+  #   predictions = cnn_model(x_train,training=True)
+  #   loss = loss_object(y_train, predictions)
+    
+  
+  # gradients = tape.gradient(loss, cnn_model.trainable_variables)
+
+  # optimizer.apply_gradients(zip(gradients, cnn_model.trainable_variables))
+  # print_layer_variables(cnn_model)
+  # train_loss(loss)
+  # train_accuracy(y_train, predictions)
+  
+  #test_step(x_test, y_test)
+  # predictions = cnn_model(x_test, training=False)
+  # output = tf.argmax(predictions, axis=1, output_type=tf.int32)
+  # 1000
+  # results = fit_distribution(output.numpy(),0.99,0.01)
+  # result_list.append(results)
+  # print(results.iloc[0]['chi_square'], results.iloc[0]['Distribution'])
+  
+  # distribution, results = calculate_dis_props(predictions[0].numpy())
+  # dist_list.append(distribution)
+  
+  # t_loss = loss_object(y_test, predictions)
+
+  # test_loss(t_loss)
+  # test_accuracy(y_test, predictions)
+  
   print(
     f'Epoch {epoch + 1}: '
-    f'Loss: {train_loss.result()}, '
-    f'Accuracy: {train_accuracy.result() * 100}, '
-    f'Test Loss: {test_loss.result()}, '
-    f'Test Accuracy: {test_accuracy.result() * 100}'
-
+    f'Train Loss: {train_loss.result()}, '
+    f'Train Accuracy: {train_accuracy.result() * 100}, '\
   )
-  print_layer_variables(cnn_model)
+
+print("Get last node")
+print_layer_variables(cnn_model)
   
 
   
