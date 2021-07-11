@@ -4,12 +4,13 @@ Created on Mon May 31 16:19:25 2021
 
 @author: Hubert Kyeremateng-Boateng
 """
-from distribution import fit_distribution, calculate_dis_props
+from distribution import method_stats
 import numpy as np
 import pandas as pd
 import datetime
 from sklearn.preprocessing import LabelEncoder, Normalizer
-
+from fitter import Fitter
+import scipy.stats as st
 import tensorflow as tf
 from tensorflow.keras import Model
 from tensorflow.keras.layers import Dense, InputLayer,  BatchNormalization
@@ -38,7 +39,7 @@ train_data[3]= encoder.fit_transform(train_data.iloc[:,3])
 # test_data[2]= encoder.fit_transform(test_data.iloc[:,2])
 # test_data[3]= encoder.fit_transform(test_data.iloc[:,3])
 
-X_train, X_test, y_train, y_test = train_test_split(train_data, train_labels, test_size=0.3, random_state=42)
+X_train, X_test, y_train, y_test = train_test_split(train_data, train_labels, test_size=0.2, random_state=42)
 
 
 encoded_labels = encoder.fit_transform(y_train)
@@ -111,134 +112,122 @@ train_accuracy = tf.keras.metrics.SparseCategoricalAccuracy(name='train_accuracy
 test_loss = tf.keras.metrics.Mean(name='test_loss')
 test_accuracy = tf.keras.metrics.SparseCategoricalAccuracy(name='test_accuracy')
 
-predict= []
 
+input_data = tf.keras.Input(shape=(41,))
+inputs = Dense(1024, activation="relu", name="dense1")(input_data)
+inputs = Dense(1024, activation="relu", name="dense2")(inputs)
+inputs = BatchNormalization()(inputs)
+inputs = Dense(1024, activation="relu", name="dense3")(inputs)
+inputs = BatchNormalization()(inputs)
+#inputs = Dense(1024, activation="relu", name="dense3")(inputs)
+#inputs = Dense(1024, activation="relu", name="dense3")(inputs)
+inputs = Dense(512, activation="relu", name="dense4")(inputs)
+inputs = BatchNormalization()(inputs)
+inputs = Dense(256, activation="relu", name="dense5")(inputs) #256x23
+inputs = BatchNormalization()(inputs)
+#inputs = Dense(23, activation=tf.nn.softmax)(inputs)
+outputs = Dense(23, activation=tf.nn.softmax, name="softmax")(inputs)
+model = tf.keras.Model(inputs=input_data, outputs=outputs, name="test_model")
+model.summary()
+model.compile(
+    loss=tf.keras.losses.SparseCategoricalCrossentropy(from_logits=True),
+    optimizer=tf.keras.optimizers.Adam(),
+    metrics=["accuracy"],
+)
+history = model.fit(x_train,y_train,epochs=1, validation_split=0.2)
 
+softmax_feature_layer = tf.keras.models.Model(
+    inputs=model.inputs,
+    outputs=model.get_layer(name="softmax").output,
+)
+train_outputs = softmax_feature_layer(x_train)
 
-
-@tf.function
-def train_step(trainDS, labels):
-  
-  with tf.GradientTape() as tape:
-
-    predictions = dnn_model(trainDS,training=True)
-    print(predictions)
-    loss = loss_object(labels, predictions)
+import scipy.stats
+print("--------------------------------------------------------------------------------------------")
+#https://github.com/cokelaer/fitter/blob/58a41cf4b4a119e0d86e1adc7462cc14eefc93e7/src/fitter/fitter.py#L42
+# def get_all_distributions():
+#     distributions = []
+#     for this in dir(scipy.stats):
+#         if "fit" in eval("dir(scipy.stats." + this + ")"):
+#             distributions.append(this)
+#     return distributions
+# all_distributions = get_all_distributions()
+# data = train_outputs.numpy()
+# all_distributions = [st.laplace, st.norm]
+# mles = []
+# for distribution in all_distributions:
+#     m,v,s,k = distribution.stats(data, moments='mvsk')
+#     pars = distribution.fit(data)
+#     mle = distribution.nnlf(pars, data)
+#     mles.append(mle)
     
-    
-  
-  gradients = tape.gradient(loss, dnn_model.trainable_variables)
+# results = [(distribution.name, mle) for distribution, mle in zip(all_distributions, mles)]
+# best_fit = sorted(zip(all_distributions, mles), key=lambda d: d[1])[0]
+# print('Best fit reached using {}, MLE value: {}'.format(best_fit[0].name, best_fit[1]))
+data_test = train_outputs.numpy()
+train_distributions = method_stats(train_outputs.numpy()) #100778x23
+print("-"*50)
+test_outputs = softmax_feature_layer(x_test)
 
-  optimizer.apply_gradients(zip(gradients, dnn_model.trainable_variables))
-  
-  train_loss(loss)
-  train_accuracy(labels, predictions)
-  
-@tf.function
-def test_step(test_data, labels):
-  # training=False is only needed if there are layers with different
-  # behavior during training versus inference (e.g. Dropout).
-  predictions = dnn_model(test_data)
-  t_loss = loss_object(labels, predictions)
+test_distributions = method_stats(test_outputs.numpy())
+# anomaly = []
+# def calculateAnomaly(train_distributions, test_distributions):
+#     compared = train_distributions.compare(test_distributions, keep_shape=True, keep_equal=True)
+#     #print(f'Percent Anomaly: {(1-sum(anomaly)/1) * 100}%')
+#     return compared
+# result = calculateAnomaly(train_distributions, test_distributions)
+# anomaly = []
+# count = 0;
 
-  test_loss(t_loss)
-  test_accuracy(labels, predictions)
-
+# EPOCHS = 1
+# dist_list = []
+# for epoch in range(EPOCHS):
+#   # Reset the metrics at the start of the next epoch
+#   train_loss.reset_states()
+#   train_accuracy.reset_states()
+#   test_loss.reset_states()
+#   test_accuracy.reset_states()
   
-# current_time = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
-# train_log_dir = 'logs/gradient_tape/' + current_time + '/train'
-# test_log_dir = 'logs/gradient_tape/' + current_time + '/test'
-# train_summary_writer = tf.summary.create_file_writer(train_log_dir)
-# test_summary_writer = tf.summary.create_file_writer(test_log_dir)
-def print_layer_variables(model):
-    print(model.layers)
-    # distribution_list = []
-    # nodes = model.trainable_variables[8]
-    # try:
-    #     for i in range(1):
-    #       distribution, results = calculate_dis_props(nodes[i].numpy())
-    #       distribution_list.append(distribution)
-    # except NotImplementedError:
-    #     pass
-    # except ValueError:
-    #     pass
-    # except AttributeError:
-    #     pass
-    # return distribution_list
-
-anomaly = []
-count = 0;
-
-EPOCHS = 1
-dist_list = []
-for epoch in range(EPOCHS):
-  # Reset the metrics at the start of the next epoch
-  train_loss.reset_states()
-  train_accuracy.reset_states()
-  test_loss.reset_states()
-  test_accuracy.reset_states()
+#   #fit_distribution(X_train,0.99,0.01)
+#   #train_step(x_train, y_train)
   
-  #fit_distribution(X_train,0.99,0.01)
-  #train_step(x_train, y_train)
-  
-  with tf.GradientTape() as tape:
+#   with tf.GradientTape() as tape:
 
-     predictions = dnn_model(x_train,training=True)
-     print(predictions)
-     print(dnn_model.get_layer("dense5"))
-     loss = loss_object(y_train, predictions)
+#       predictions = dnn_model(x_train,training=True)
+
+#       loss = loss_object(y_train, predictions)
 
     
   
-  gradients = tape.gradient(loss,dnn_model.trainable_variables)
+#   gradients = tape.gradient(loss,dnn_model.trainable_variables)
 
-  optimizer.apply_gradients(zip(gradients, dnn_model.trainable_variables))
+#   optimizer.apply_gradients(zip(gradients, dnn_model.trainable_variables))
   
-  train_loss(loss)
-  train_accuracy(y_train, predictions)
+#   train_loss(loss)
+#   train_accuracy(y_train, predictions)
   
-  #test_step(x_test, y_test)
-  # predictions = cnn_model(x_test, training=False)
-  # output = tf.argmax(predictions, axis=1, output_type=tf.int32)
-  # 1000
-  # results = fit_distribution(output.numpy(),0.99,0.01)
-  # result_list.append(results)
-  # print(results.iloc[0]['chi_square'], results.iloc[0]['Distribution'])
-  
-  # distribution, results = calculate_dis_props(predictions[0].numpy())
-  # dist_list.append(distribution)
-  
-  # t_loss = loss_object(y_test, predictions)
 
-  # test_loss(t_loss)
-  # test_accuracy(y_test, predictions)
-  print(dnn_model.summary())
-  print(
-    f'Epoch {epoch + 1}: '
-    f'Train Loss: {train_loss.result()}, '
-    f'Train Accuracy: {train_accuracy.result() * 100}, '\
-  )
+#   predictions = dnn_model(x_train, training=False)
+#   # output = tf.argmax(predictions, axis=1, output_type=tf.int32)
+#   print(predictions)
+
+  
+#   # distribution, results = calculate_dis_props(predictions[0].numpy())
+#   # dist_list.append(distribution)
+  
+#   # t_loss = loss_object(y_test, predictions)
+
+#   # test_loss(t_loss)
+#   # test_accuracy(y_test, predictions)
+
+#   print(
+#      f'Epoch {epoch + 1}: '
+#      f'Train Loss: {train_loss.result()}, '
+#      f'Train Accuracy: {train_accuracy.result() * 100}, '\
+#   )
       
 
-# input_lay = tf.keras.Input(shape=(41,))
-# inputs = Dense(1024,name="d1")(input_lay)
-# inputs = Dense(256)(inputs)
-# inputs = tf.keras.layers.ReLU(name="relu")(inputs)
-# inputs = Dense(23)(inputs)
-# outputs = tf.keras.layers.Softmax(name="softmax")(inputs)
-# model = tf.keras.Model(inputs=input_lay, outputs=outputs, name="test_model")
-# model.summary()
-# model.compile(
-#     loss=tf.keras.losses.SparseCategoricalCrossentropy(from_logits=True),
-#     optimizer=tf.keras.optimizers.Adam(),
-#     metrics=["accuracy"],
-# )
-# history = model.fit(x_train,y_train,epochs=1)
-# features_layer1 = tf.keras.models.Model(
-#     inputs=model.inputs,
-#     outputs=model.get_layer(name="softmax").output,
-# )
-# print(features_layer1(x_test))
+
 # def checkAnomaly(trainDistNodes, testDist):
 #     print("------- Checking Anomaly----------")
 #     tNode = trainDistNodes
@@ -247,13 +236,7 @@ for epoch in range(EPOCHS):
 #         test = (tsNode['Type of Distribution'] == b['Type of Distribution'])
 #         anomaly.append(test.iloc[0])
 
-# anomaly = []
-def calculateAnomaly(trNode, tsNode):
-    for a, b in enumerate(trNode):
-        test = (tsNode[a]['Type of Distribution'] == b['Type of Distribution'])
-        print(test)
-        anomaly.append(test.iloc[0])
-    print(f'Percent Anomaly: {(1-sum(anomaly)/1) * 100}%')
+
         
     
 # train_dist_list = print_layer_variables(dnn_model)

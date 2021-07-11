@@ -20,15 +20,9 @@ import statsmodels.api as sm
 import seaborn as sns
 import pylab as py 
 from scipy import stats
-# vehicle_df = pd.read_csv('vehicles.csv')
-dist_names = ['weibull_min','norm','weibull_max','beta','invgauss','uniform','gamma','expon','lognorm','pearson3','triang']
-# columns = ['id','price','year','manufacturer','condition','odometer']
-# vehicle_data = vehicle_df[columns]
 
 
-# vehicle_data.isna().sum()
-
-def standarise(column,pct,pct_lower):
+def standardise(column,pct,pct_lower):
     sc = StandardScaler() 
    # x_y = vehicle_data[column][vehicle_data[column].notnull()]
     y = column #vehicle_data[column][vehicle_data[column].notnull()].to_list()
@@ -46,11 +40,12 @@ def standarise(column,pct,pct_lower):
 def fit_distribution(column,pct,pct_lower):
     # Set up list of candidate distributions to use
     # See https://docs.scipy.org/doc/scipy/reference/stats.html for more
-    y_std,size,y_org = standarise(column,pct,pct_lower)
+    y_std,size,y_org = standardise(column,pct,pct_lower)
     chi_square_statistics = []
     # 11 equi-distant bins of observed Data 
     percentile_bins = np.linspace(0,100,11)
     percentile_cutoffs = np.percentile(y_std, percentile_bins)
+    print(percentile_cutoffs)
     observed_frequency, bins = (np.histogram(y_std, bins=percentile_cutoffs))
     cum_observed_frequency = np.cumsum(observed_frequency)
 
@@ -90,82 +85,55 @@ def fit_distribution(column,pct,pct_lower):
     #print(results[0])
     return results
 
-def calculate_dis_props(dist_data):
+def calculate_dis_props(dist_data, distribution):
     result = fit_distribution(dist_data, 0.99, 0.01)
     dist_name = result.iloc[0]['Distribution']
-
-    distribution = pd.DataFrame()
-    distribution['Type of Distribution'] = [dist_name]
+    print(dist_name)
     if dist_name == "lognorm":
         mean, var, skew, kurt = lognorm.stats(dist_data, moments='mvsk')
-        distribution['Mean'] = [mean]
-        distribution['Standard Deviation'] = [np.sqrt(var)]
-        distribution['Skewness'] = [skew]
-        distribution['Kurtosis'] = [kurt]
+        distribution = distribution.append({'Type of Distribution':dist_name,'Mean': mean,'Standard Deviation':np.sqrt(var),'Skewness' : skew,'Kurtosis' :kurt},ignore_index=True)
     elif dist_name == "gamma":
         mean, var, skew, kurt = gamma.stats(dist_data, moments='mvsk')
-        distribution['Mean'] = [mean]
-        distribution['Standard Deviation'] = [np.sqrt(var)]
-        distribution['Skewness'] = [skew]
-        distribution['Kurtosis'] = [kurt]
-    elif dist_name == 'weibull_min':
-        mean, var, skew, kurt = weibull_min.stats(dist_data, moments='mvsk')
-        distribution['Mean'] = [mean]
-        distribution['Standard Deviation'] = [np.sqrt(var)]
-        distribution['Skewness'] = [skew]
-        distribution['Kurtosis'] = [kurt]
+        distribution = distribution.append({'Type of Distribution':dist_name,'Mean': mean,'Standard Deviation':np.sqrt(var),'Skewness' : skew,'Kurtosis' :kurt},ignore_index=True)
+    elif dist_name == 'exponpow':
+        mean, var, skew, kurt = exponpow.stats(dist_data, moments='mvsk')
+        distribution = distribution.append({'Type of Distribution':dist_name,'Mean': mean,'Standard Deviation':np.sqrt(var),'Skewness' : skew,'Kurtosis' :kurt},ignore_index=True)
     elif dist_name == 'norm':
         mean, var, skew, kurt = norm.stats(dist_data, moments='mvsk')
-        distribution['Mean'] = [mean]
-        distribution['Standard Deviation'] = [var]
-        distribution['Skewness'] = [skew]
-        distribution['Kurtosis'] = [kurt]
-    elif dist_name == 'weibull_max':
-        mean, var, skew, kurt = weibull_max.stats(dist_data, moments='mvsk')
-        distribution['Mean'] = [mean]
-        distribution['Standard Deviation'] = [var]
-        distribution['Skewness'] = [skew]
-        distribution['Kurtosis'] = [kurt]
+        distribution = distribution.append({'Type of Distribution':dist_name,'Mean': mean,'Standard Deviation':np.sqrt(var),'Skewness' : skew,'Kurtosis' :kurt},ignore_index=True)
+    elif dist_name == 'chi2':
+        mean, var, skew, kurt = chi2.stats(dist_data, moments='mvsk')
+        distribution = distribution.append({'Type of Distribution':dist_name,'Mean': mean,'Standard Deviation':np.sqrt(var),'Skewness' : skew,'Kurtosis' :kurt},ignore_index=True)
     elif dist_name == "beta":
         mean, var, skew, kurt = beta.stats(dist_data,1, moments='mvsk')
-        distribution['Mean'] = [mean]
-        distribution['Standard Deviation'] = [var]
-        distribution['Skewness'] = [skew]
-        distribution['Kurtosis'] = [kurt]
+        distribution = distribution.append({'Type of Distribution':dist_name,'Mean': mean,'Standard Deviation':np.sqrt(var),'Skewness' : skew,'Kurtosis' :kurt},ignore_index=True)
     elif dist_name == 'invgauss':
         mean, var, skew, kurt = invgauss.stats(dist_data, moments='mvsk')
-        distribution['Mean'] = [mean]
-        distribution['Standard Deviation'] = [var]
-        distribution['Skewness'] = [skew]
-        distribution['Kurtosis'] = [kurt]
+        distribution = distribution.append({'Type of Distribution':dist_name,'Mean': mean,'Standard Deviation':np.sqrt(var),'Skewness' : skew,'Kurtosis' :kurt},ignore_index=True)
     elif dist_name == 'expon':
         mean, var, skew, kurt = expon.stats(dist_data, moments='mvsk')
-        distribution['Mean'] = [mean]
-        distribution['Standard Deviation'] = [var]
-        distribution['Skewness'] = [skew]
-        distribution['Kurtosis'] = [kurt]
+        distribution = distribution.append({'Type of Distribution':dist_name,'Mean': mean,'Standard Deviation':np.sqrt(var),'Skewness' : skew,'Kurtosis' :kurt},ignore_index=True)
     elif dist_name == 'uniform':
         mean, var, skew, kurt = uniform.stats(dist_data, moments='mvsk')
-        distribution['Mean'] = [mean]
-        distribution['Standard Deviation'] = [var]
-        distribution['Skewness'] = [skew]
-        distribution['Kurtosis'] = [kurt]
-    elif dist_name == 'pearson3':
-        mean, var, skew, kurt = pearson3.stats(dist_data, moments='mvsk')
-        distribution['Mean'] = [mean]
-        distribution['Standard Deviation'] = [np.sqrt(var)]
-        distribution['Skewness'] = [skew]
-        distribution['Kurtosis'] = [kurt]
+        distribution = distribution.append({'Type of Distribution':dist_name,'Mean': mean,'Standard Deviation':np.sqrt(var),'Skewness' : skew,'Kurtosis' :kurt},ignore_index=True)
+    elif dist_name == 'powerlaw':
+        mean, var, skew, kurt = powerlaw.stats(dist_data, moments='mvsk')
+        distribution = distribution.append({'Type of Distribution':dist_name,'Mean': mean,'Standard Deviation':np.sqrt(var),'Skewness' : skew,'Kurtosis' :kurt},ignore_index=True)
     elif dist_name == 'triang':
         mean, var, skew, kurt = triang.stats(dist_data, moments='mvsk')
-        distribution['Mean'] = [mean]
-        distribution['Standard Deviation'] = [np.sqrt(var)]
-        distribution['Skewness'] = [skew]
-        distribution['Kurtosis'] = [kurt]  
+        distribution = distribution.append({'Type of Distribution':dist_name,'Mean': mean,'Standard Deviation':np.sqrt(var),'Skewness' : skew,'Kurtosis' :kurt},ignore_index=True)
     return distribution,result
 # x_y,results = fit_distribution('year',0.99,0.01)
-dist_names = ['weibull_min','norm','weibull_max','beta','invgauss','uniform','gamma','expon','lognorm','pearson3','triang']
+dist_names = ['norm','chi2','beta','invgauss','uniform','gamma','expon','lognorm','powerlaw','triang']
+common = ['cauchy', 'chi2', 'expon', 'exponpow', 'gamma', 'lognorm', 'norm', 'powerlaw', 'rayleigh', 'uniform']
 
+def  method_stats(dist_data):
+    data = dist_data.transpose()
+    distribution = pd.DataFrame(columns=('Type of Distribution','Mean','Standard Deviation','Skewness','Kurtosis'))
+    for i in data:
+        distribution, result = calculate_dis_props(i, distribution)
+    return distribution
+            
 # results_sort = results['chi_square']
 # results_arr = np.array(results_sort)
 # sort_results = sorted(results_arr)
