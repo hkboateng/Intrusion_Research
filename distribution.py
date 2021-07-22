@@ -20,12 +20,12 @@ import statsmodels.api as sm
 import seaborn as sns
 import pylab as py 
 from scipy import stats
-
+from fitter import Fitter
 
 def standardise(column,pct,pct_lower):
     sc = StandardScaler() 
    # x_y = vehicle_data[column][vehicle_data[column].notnull()]
-    y = column #vehicle_data[column][vehicle_data[column].notnull()].to_list()
+    y = column+5 #vehicle_data[column][vehicle_data[column].notnull()].to_list()
     y.sort()
     len_y = len(y)
     y = y[int(pct_lower * len_y):int(len_y * pct)]
@@ -38,6 +38,7 @@ def standardise(column,pct,pct_lower):
 
 
 def fit_distribution(column,pct,pct_lower):
+    print(column)
     # Set up list of candidate distributions to use
     # See https://docs.scipy.org/doc/scipy/reference/stats.html for more
     y_std,size,y_org = standardise(column,pct,pct_lower)
@@ -45,7 +46,7 @@ def fit_distribution(column,pct,pct_lower):
     # 11 equi-distant bins of observed Data 
     percentile_bins = np.linspace(0,100,11)
     percentile_cutoffs = np.percentile(y_std, percentile_bins)
-    print(percentile_cutoffs)
+
     observed_frequency, bins = (np.histogram(y_std, bins=percentile_cutoffs))
     cum_observed_frequency = np.cumsum(observed_frequency)
 
@@ -55,7 +56,6 @@ def fit_distribution(column,pct,pct_lower):
         dist = getattr(scipy.stats, distribution)
         param = dist.fit(y_std)
         #print("{}\n{}\n".format(dist, param))
-
 
         # Get expected counts in percentile bins
         # cdf of fitted sistrinution across bins
@@ -79,53 +79,48 @@ def fit_distribution(column,pct,pct_lower):
     results['chi_square'] = chi_square_statistics
     results.sort_values(['chi_square'], inplace=True)
 
-    #print ('\nDistributions listed by Betterment of fit:')
-    #print ('............................................')
-    #print (results)
-    #print(results[0])
     return results
 
 def calculate_dis_props(dist_data, distribution):
+    print(dist_data.shape)
     result = fit_distribution(dist_data, 0.99, 0.01)
     dist_name = result.iloc[0]['Distribution']
-    print(dist_name)
+    print(np.std(dist_data))
     if dist_name == "lognorm":
+        
         mean, var, skew, kurt = lognorm.stats(dist_data, moments='mvsk')
-        distribution = distribution.append({'Type of Distribution':dist_name,'Mean': mean,'Standard Deviation':np.sqrt(var),'Skewness' : skew,'Kurtosis' :kurt},ignore_index=True)
+        distribution = distribution.append({'Type of Distribution':dist_name,'Mean': np.mean(dist_data),'Standard Deviation': np.std(dist_data),'Skewness' : skew,'Kurtosis' :kurt},ignore_index=True)
     elif dist_name == "gamma":
         mean, var, skew, kurt = gamma.stats(dist_data, moments='mvsk')
-        distribution = distribution.append({'Type of Distribution':dist_name,'Mean': mean,'Standard Deviation':np.sqrt(var),'Skewness' : skew,'Kurtosis' :kurt},ignore_index=True)
+        distribution = distribution.append({'Type of Distribution':dist_name,'Mean': np.mean(dist_data),'Standard Deviation': np.std(dist_data),'Skewness' : skew,'Kurtosis' :kurt},ignore_index=True)
     elif dist_name == 'exponpow':
         mean, var, skew, kurt = exponpow.stats(dist_data, moments='mvsk')
-        distribution = distribution.append({'Type of Distribution':dist_name,'Mean': mean,'Standard Deviation':np.sqrt(var),'Skewness' : skew,'Kurtosis' :kurt},ignore_index=True)
+        distribution = distribution.append({'Type of Distribution':dist_name,'Mean': np.mean(dist_data),'Standard Deviation': np.std(dist_data),'Skewness' : skew,'Kurtosis' :kurt},ignore_index=True)
     elif dist_name == 'norm':
         mean, var, skew, kurt = norm.stats(dist_data, moments='mvsk')
-        distribution = distribution.append({'Type of Distribution':dist_name,'Mean': mean,'Standard Deviation':np.sqrt(var),'Skewness' : skew,'Kurtosis' :kurt},ignore_index=True)
+        distribution = distribution.append({'Type of Distribution':dist_name,'Mean': np.mean(dist_data),'Standard Deviation':np.std(dist_data),'Skewness' : skew,'Kurtosis' :kurt},ignore_index=True)
     elif dist_name == 'chi2':
         mean, var, skew, kurt = chi2.stats(dist_data, moments='mvsk')
-        distribution = distribution.append({'Type of Distribution':dist_name,'Mean': mean,'Standard Deviation':np.sqrt(var),'Skewness' : skew,'Kurtosis' :kurt},ignore_index=True)
-    elif dist_name == "beta":
-        mean, var, skew, kurt = beta.stats(dist_data,1, moments='mvsk')
-        distribution = distribution.append({'Type of Distribution':dist_name,'Mean': mean,'Standard Deviation':np.sqrt(var),'Skewness' : skew,'Kurtosis' :kurt},ignore_index=True)
+        distribution = distribution.append({'Type of Distribution':dist_name,'Mean': np.mean(dist_data),'Standard Deviation':np.std(dist_data),'Skewness' : skew,'Kurtosis' :kurt},ignore_index=True)
     elif dist_name == 'invgauss':
         mean, var, skew, kurt = invgauss.stats(dist_data, moments='mvsk')
-        distribution = distribution.append({'Type of Distribution':dist_name,'Mean': mean,'Standard Deviation':np.sqrt(var),'Skewness' : skew,'Kurtosis' :kurt},ignore_index=True)
+        distribution = distribution.append({'Type of Distribution':dist_name,'Mean': np.mean(dist_data),'Standard Deviation':np.std(dist_data),'Skewness' : skew,'Kurtosis' :kurt},ignore_index=True)
     elif dist_name == 'expon':
         mean, var, skew, kurt = expon.stats(dist_data, moments='mvsk')
-        distribution = distribution.append({'Type of Distribution':dist_name,'Mean': mean,'Standard Deviation':np.sqrt(var),'Skewness' : skew,'Kurtosis' :kurt},ignore_index=True)
+        distribution = distribution.append({'Type of Distribution':dist_name,'Mean': np.mean(dist_data),'Standard Deviation':np.std(dist_data),'Skewness' : skew,'Kurtosis' :kurt},ignore_index=True)
     elif dist_name == 'uniform':
         mean, var, skew, kurt = uniform.stats(dist_data, moments='mvsk')
-        distribution = distribution.append({'Type of Distribution':dist_name,'Mean': mean,'Standard Deviation':np.sqrt(var),'Skewness' : skew,'Kurtosis' :kurt},ignore_index=True)
+        distribution = distribution.append({'Type of Distribution':dist_name,'Mean': np.mean(dist_data),'Standard Deviation':np.std(dist_data),'Skewness' : skew,'Kurtosis' :kurt},ignore_index=True)
     elif dist_name == 'powerlaw':
         mean, var, skew, kurt = powerlaw.stats(dist_data, moments='mvsk')
-        distribution = distribution.append({'Type of Distribution':dist_name,'Mean': mean,'Standard Deviation':np.sqrt(var),'Skewness' : skew,'Kurtosis' :kurt},ignore_index=True)
+        distribution = distribution.append({'Type of Distribution':dist_name,'Mean': np.mean(dist_data),'Standard Deviation':np.std(dist_data),'Skewness' : skew,'Kurtosis' :kurt},ignore_index=True)
     elif dist_name == 'triang':
         mean, var, skew, kurt = triang.stats(dist_data, moments='mvsk')
-        distribution = distribution.append({'Type of Distribution':dist_name,'Mean': mean,'Standard Deviation':np.sqrt(var),'Skewness' : skew,'Kurtosis' :kurt},ignore_index=True)
+        distribution = distribution.append({'Type of Distribution':dist_name,'Mean': np.mean(dist_data),'Standard Deviation':np.std(dist_data),'Skewness' : skew,'Kurtosis' :kurt},ignore_index=True)
     return distribution,result
 # x_y,results = fit_distribution('year',0.99,0.01)
-dist_names = ['norm','chi2','beta','invgauss','uniform','gamma','expon','lognorm','powerlaw','triang']
-common = ['cauchy', 'chi2', 'expon', 'exponpow', 'gamma', 'lognorm', 'norm', 'powerlaw', 'rayleigh', 'uniform']
+dist_names = ['norm','chi2','invgauss','uniform','gamma','expon','lognorm','powerlaw']
+#common = ['cauchy', 'chi2', 'expon', 'exponpow', 'gamma', 'lognorm', 'norm', 'powerlaw', 'rayleigh', 'uniform']
 
 def  method_stats(dist_data):
     data = dist_data.transpose()
@@ -133,9 +128,11 @@ def  method_stats(dist_data):
     for i in data:
         distribution, result = calculate_dis_props(i, distribution)
     return distribution
-            
-# results_sort = results['chi_square']
-# results_arr = np.array(results_sort)
-# sort_results = sorted(results_arr)
 
-# results.iloc[0]['chi_square']
+def get_distributions():
+    distributions = []
+    for this in dir(scipy.stats):
+        if "fit" in eval("dir(scipy.stats." + this + ")"):
+            distributions.append(this)
+    return distributions
+
