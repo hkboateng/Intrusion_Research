@@ -25,7 +25,7 @@ from fitter import Fitter
 def standardise(column,pct,pct_lower):
     sc = StandardScaler() 
    # x_y = vehicle_data[column][vehicle_data[column].notnull()]
-    y = column+5 #vehicle_data[column][vehicle_data[column].notnull()].to_list()
+    y = column #vehicle_data[column][vehicle_data[column].notnull()].to_list()
     y.sort()
     len_y = len(y)
     y = y[int(pct_lower * len_y):int(len_y * pct)]
@@ -38,7 +38,7 @@ def standardise(column,pct,pct_lower):
 
 
 def fit_distribution(column,pct,pct_lower):
-    print(column)
+
     # Set up list of candidate distributions to use
     # See https://docs.scipy.org/doc/scipy/reference/stats.html for more
     y_std,size,y_org = standardise(column,pct,pct_lower)
@@ -46,10 +46,15 @@ def fit_distribution(column,pct,pct_lower):
     # 11 equi-distant bins of observed Data 
     percentile_bins = np.linspace(0,100,11)
     percentile_cutoffs = np.percentile(y_std, percentile_bins)
-
-    observed_frequency, bins = (np.histogram(y_std, bins=percentile_cutoffs))
+    try:
+        observed_frequency, bins = (np.histogram(y_std, bins=percentile_cutoffs))
+        #print('observed_frequency Length: {}, bin {}'.format(len(observed_frequency), len(bins)) )
+    except ValueError:
+        #print("ValueError")
+        observed_frequency, bins = (np.histogram(y_std, bins=10))
+        
     cum_observed_frequency = np.cumsum(observed_frequency)
-
+    print('cum_observed_frequency Length: {}'.format(len(cum_observed_frequency)) )
     # Loop through candidate distributions
     for distribution in dist_names:
         # Set up distribution and get fitted distribution parameters
@@ -82,10 +87,10 @@ def fit_distribution(column,pct,pct_lower):
     return results
 
 def calculate_dis_props(dist_data, distribution):
-    print(dist_data.shape)
+
     result = fit_distribution(dist_data, 0.99, 0.01)
     dist_name = result.iloc[0]['Distribution']
-    print(np.std(dist_data))
+
     if dist_name == "lognorm":
         
         mean, var, skew, kurt = lognorm.stats(dist_data, moments='mvsk')
@@ -119,8 +124,7 @@ def calculate_dis_props(dist_data, distribution):
         distribution = distribution.append({'Type of Distribution':dist_name,'Mean': np.mean(dist_data),'Standard Deviation':np.std(dist_data),'Skewness' : skew,'Kurtosis' :kurt},ignore_index=True)
     return distribution,result
 # x_y,results = fit_distribution('year',0.99,0.01)
-dist_names = ['norm','chi2','invgauss','uniform','gamma','expon','lognorm','powerlaw']
-#common = ['cauchy', 'chi2', 'expon', 'exponpow', 'gamma', 'lognorm', 'norm', 'powerlaw', 'rayleigh', 'uniform']
+dist_names = ['lognorm','triang','norm','chi2','invgauss','uniform','gamma','expon','lognorm','powerlaw','exponpow']
 
 def  method_stats(dist_data):
     data = dist_data.transpose()
@@ -129,6 +133,7 @@ def  method_stats(dist_data):
         distribution, result = calculate_dis_props(i, distribution)
     return distribution
 
+@staticmethod
 def get_distributions():
     distributions = []
     for this in dir(scipy.stats):
