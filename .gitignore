@@ -1,2 +1,5 @@
 .ipynb_checkpoints
+*.pb
+*.index
+*.data*
 __pycache__
