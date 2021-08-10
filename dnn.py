@@ -22,18 +22,14 @@ import tensorflow as tf
 from sklearn.model_selection import train_test_split
 import pandas as pd
 def calculateAnomaly(train_distributions, test_data):
-    anomaly_threshold = np.float64(0.9)
+    anomaly_threshold = np.float64(0.50)
     degree_of_freedom = 1
     defect_count = 0;
     for index,data in train_distributions.iterrows():
         test = test_data[index]
-
         moni_width = len(test)
         train_mean = data['Mean']
         tr_std = data['Standard Deviation']
-        # val_1 = sum((tr_std - (degree_of_freedom * train_mean)) < test)
-        # val_2 = sum(test < (tr_std + (degree_of_freedom * train_mean)))
-        #print(val_1/moni_width, val_2/moni_width)
         total_sum = ((tr_std - (degree_of_freedom * train_mean)) < test) & (test < (tr_std + (degree_of_freedom * train_mean)))
         print(sum(total_sum),sum(total_sum)/moni_width , np.float64(sum(total_sum)/moni_width) < anomaly_threshold)
         if np.float64(sum(total_sum)/moni_width) < anomaly_threshold:
@@ -90,10 +86,10 @@ def anomaly_model(train_data_shape):
 # history = model.fit(x_train,y_train,epochs=500, validation_split=0.2)
 
 def process_dataset(train_dataSet,  class_labels, hotEncoder=None, normalizer=None):
-    print(train_dataSet.shape)
+    
     encoder = LabelEncoder()
     if hotEncoder == None:
-        hotEncoder = OneHotEncoder(handle_unknown='ignore', sparse=False)
+        hotEncoder = OneHotEncoder(handle_unknown='ignore')
 
     if normalizer == None:
         normalizer = Normalizer()
@@ -112,7 +108,7 @@ def process_dataset(train_dataSet,  class_labels, hotEncoder=None, normalizer=No
     y_train = np.reshape(encoded_labels,(-1,1))
     y_train = tf.convert_to_tensor(y_train)
 
-    x_train = tf.convert_to_tensor(train_X)
+    x_train = convert_sparse_matrix_to_sparse_tensor(train_X)
     #x_test = convert_sparse_matrix_to_sparse_tensor(test_X)
 
     return x_train, y_train, hotEncoder, normalizer#, x_test
@@ -122,32 +118,30 @@ def process_individual_dataset(train_dataSet, class_labels):
     hotEncoder = OneHotEncoder(handle_unknown='ignore')
 
     htTrain = hotEncoder.fit_transform(train_dataSet)
-    #htTest = hotEncoder.transform(test_dataSet)
 
     encoded_labels = encoder.fit_transform(class_labels)
 
     #Scale and Normalizer
     normalizer = Normalizer()
     train_X = normalizer.fit_transform(htTrain)
-    #test_X = normalizer.fit_transform(htTest)
 
-    #Split data
-    
     y_train = np.reshape(encoded_labels,(-1,1))
     y_train = tf.convert_to_tensor(y_train)
 
     x_train = tf.convert_to_tensor(train_X)
-    #x_test = convert_sparse_matrix_to_sparse_tensor(test_X)
     return x_train, y_train,hotEncoder,normalizer
 
 def save_train_preprocessing_paramters(oneHotEncoder, normalizer, filename_df):
     
     preprocessor_df = pd.DataFrame(columns=('Class Label','HotEncoder','Normalizer'))
     preprocessor_df = preprocessor_df.append({'Class Label': filename_df,  'HotEncoder': oneHotEncoder, 'Normalizer': normalizer},ignore_index=True)
-    jb.dump(preprocessor_df, filename_df)
+    jb.dump(preprocessor_df, filename_df, compress=True)
     
 def save_data(filename, date_to_save):
     jb.dump(date_to_save, filename)
+    
+def load_data(filename):
+    return jb.load(filename)
 def generate_individual_class_model(class_train_data,epochs):
     class_labels = class_train_data.iloc[:,41]  #Get All Labels from Train data
     unique_train_labels = np.unique(class_labels)
@@ -172,10 +166,9 @@ def loadDNNModel(fileName):
 
 def generate_test_dataset(dataset, filename):
     test_data, test_labels = generate_dataset_labels(dataset)
-    print(test_data)
-    preprocessor_df = load_train_preprocessing_paramters(filename)
-    oneHotEncoder = preprocessor_df['HotEncoder']
-    normalizer= preprocessor_df['Normalizer']
+    preprocessor_df = load_data(filename)
+    oneHotEncoder = preprocessor_df['HotEncoder'][0]
+    normalizer= preprocessor_df['Normalizer'][0]
     htTest = oneHotEncoder.transform(test_data)
     normTest = normalizer.transform(htTest)
     test_data = convert_sparse_matrix_to_sparse_tensor(normTest)
@@ -195,7 +188,7 @@ def filter_test_train_dataset(test_df, train_df, test_labels, train_labels):
     #labels = list(lambda x:x not in train_labels)
     return test_df.loc[test_df.iloc[:,41].isin(unique_vals_test_train)]
 
-def generate_class_model(dataset_df, individual_model=False, training_mode= True, epochs=1):
+def generate_class_model(dataset_df,individual_model=False, training_mode= True, epochs=1):
     # processed_dataset,processed_labels, processed_test_data = process_dataset(train_data, test_data,train_labels)
     if individual_model:
         #train_data, train_labels = generate_dataset_labels(dataset_df)
@@ -206,13 +199,11 @@ def generate_class_model(dataset_df, individual_model=False, training_mode= True
             test_data, test_labels = generate_dataset_labels(dataset_df)
             
             processed_dataset,processed_labels, hotEncoder,normalizer  = process_dataset(test_data,test_labels)
-            save_train_preprocessing_paramters('all_filtered', hotEncoder, normalizer )
-            # preprocess_df = pd.DataFrame(columns=('Class Label','HotEncoder','Normalizer'))
-            # preprocess_df = preprocess_df.append({'Class Label': 'all_filtered',  'HotEncoder': hotEncoder, 'Normalizer': normalizer},ignore_index=True)
-            
+            save_train_preprocessing_paramters('all_filtered.joblib', hotEncoder, normalizer )
+
             model = anomaly_model(processed_dataset.shape[1])
             model.fit(processed_dataset,processed_labels,epochs=epochs)
-            #saveDNNModel(model, "trained_model")
+            saveDNNModel(model, "trained_model")
 
     else:
         if training_mode:
@@ -220,28 +211,38 @@ def generate_class_model(dataset_df, individual_model=False, training_mode= True
             train_data, train_labels = generate_dataset_labels(dataset_df)
 
             processed_dataset,processed_labels, hotEncoder,normalizer  = process_dataset(train_data,train_labels)
-            save_train_preprocessing_paramters(hotEncoder, normalizer ,'all_filtered')
+            print("-"*20,">  Saving Normalizer and OneHotEncoder")
+            save_train_preprocessing_paramters(hotEncoder, normalizer ,'all_filtered.joblib')
+            print("Saving Normalizer and OneHotEncoder complete")
             # preprocess_df = pd.DataFrame(columns=('Class Label','HotEncoder','Normalizer'))
             # preprocess_df = preprocess_df.append({'Class Label': 'all_filtered',  'HotEncoder': hotEncoder, 'Normalizer': normalizer},ignore_index=True)
             print(type(processed_dataset))
             model = anomaly_model(processed_dataset.shape[1])
             model.fit(processed_dataset,processed_labels,epochs=epochs)
             print("------ Saving Trained Model--------------------------")
-            #saveDNNModel(model, "model_all_filtered")
-            print("------ Trained model saved--------------------------")
-            print("------ Generating Monitoring node distributions --------------------------")
-            model = loadDNNModel("model_all_filtered")
+            saveDNNModel(model, "model_all_filtered")
+            print("------ Trained model saved-----------------------")
+            print("------ Generating Monitoring node distributions -----------")
+            #model = loadDNNModel("model_all_filtered")
             
-            monitoring_node = get_monitoring_node(model, "dense6")
-            train_distributions = monitoring_node(processed_dataset)
-            save_data('train_distributions', train_distributions)
+            monitoring_node = get_monitoring_node(model, "softmax")
+            train_node = monitoring_node(processed_dataset)
+            train_distributions = method_stats(train_node.numpy())
+            save_data('train_distributions.joblib', train_distributions)
+            print("------ Completed Generating Monitoring node distributions ----------------")
+            # x_test = generate_test_dataset(test_df,'all_filtered.joblib')
+            # model = loadDNNModel("model_all_filtered")
+            # monitoring_node = get_monitoring_node(model, "dense6")
+            # test_monitoring_node = monitoring_node(x_test)
+            # train_distributions = load_data("train_distribution.joblib")
+            # calculateAnomaly(train_distributions, test_monitoring_node.numpy())
         else:
-            x_test = generate_test_dataset(dataset_df,'all_filtered')
+            x_test = generate_test_dataset(dataset_df,'all_filtered.joblib')
             model = loadDNNModel("model_all_filtered")
-            monitoring_node = get_monitoring_node(model, "dense6")
+            monitoring_node = get_monitoring_node(model, "softmax")
             test_monitoring_node = monitoring_node(x_test)
-            train_distributions = load_train_preprocessing_paramters("train_distribution")
-            calculateAnomaly(train_distributions, test_monitoring_node)
+            train_distributions = load_data("train_distributions.joblib")
+            calculateAnomaly(train_distributions, test_monitoring_node.numpy())
     
 
 
@@ -266,12 +267,18 @@ unique_vals_test_train = list(set(unique_test_labels)-set(unique_train_labels))
 #labels = list(lambda x:x not in train_labels)
 test_data_filter = test_df.loc[test_df.iloc[:,41].isin(unique_vals_test_train)]
 
-filtered_dataset  = filter_test_train_dataset(test_data, train_data, test_labels, train_labels);
-individual_model = False
+
+#filtered_dataset  = filter_test_train_dataset(test_data, train_data, test_labels, train_labels);
+individual_model = True
 training_mode = False
 generate_class_model(train_df, individual_model, epochs=1)
-generate_class_model(test_df, individual_model)
-# defect_count = calculateAnomaly(train_distributions, test_results_output)
+
+
+# params = load_train_preprocessing_paramters('all_filtered.joblib')
+# test_dataset,_ = generate_dataset_labels(test_data_filter)
+# ht = params['HotEncoder'][0]
+# ht_test = ht.transform(test_dataset)
+generate_class_model(test_data_filter, individual_model,training_mode)
 
 # print('Anamoly Detected is: {:.2f}%'.format((defect_count/test_results_output.shape[1])*100))
 # x_test = generate_test_dataset(test_df)
@@ -299,3 +306,4 @@ generate_class_model(test_df, individual_model)
 # # train_outputs_transpose = train_outputs.numpy().transpose()
 
 # # saveDNNModel(model, "filtered_dataset")    
+
