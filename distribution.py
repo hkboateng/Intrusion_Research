@@ -5,7 +5,7 @@ Created on Mon May 31 16:38:35 2021
 @author: Hubert Kyeremateng-Boateng
 """
 
-import re
+
 import pandas as pd
 import numpy as np
 # from mlutils import dataset, connector
@@ -13,14 +13,7 @@ import scipy.stats
 from scipy.stats import *
 from scipy.stats import lognorm, gamma,beta,exponnorm
 from sklearn.preprocessing import StandardScaler
-import math
-import matplotlib.pyplot as plt
-import warnings
-import statsmodels.api as sm 
-import seaborn as sns
-import pylab as py 
-from scipy import stats
-from fitter import Fitter
+
 
 def standardise(column,pct,pct_lower):
     sc = StandardScaler() 
