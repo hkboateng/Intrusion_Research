@@ -2,4 +2,7 @@
 *.pb
 *.index
 *.data*
+*.joblib
+*.pdf
+nsl-kdd
 __pycache__
