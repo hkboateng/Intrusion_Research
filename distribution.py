@@ -10,8 +10,7 @@ import pandas as pd
 import numpy as np
 # from mlutils import dataset, connector
 import scipy.stats
-from scipy.stats import *
-from scipy.stats import lognorm, gamma,beta,exponnorm
+
 from sklearn.preprocessing import StandardScaler
 
 
@@ -47,7 +46,6 @@ def fit_distribution(column,pct,pct_lower):
         observed_frequency, bins = (np.histogram(y_std, bins=10))
         
     cum_observed_frequency = np.cumsum(observed_frequency)
-    print('cum_observed_frequency Length: {}'.format(len(cum_observed_frequency)) )
     # Loop through candidate distributions
     for distribution in dist_names:
         # Set up distribution and get fitted distribution parameters
@@ -85,40 +83,81 @@ def calculate_dis_props(dist_data, distribution):
     dist_name = result.iloc[0]['Distribution']
 
     if dist_name == "lognorm":
-        
-        mean, var, skew, kurt = lognorm.stats(dist_data, moments='mvsk')
-        distribution = distribution.append({'Type of Distribution':dist_name,'Mean': np.mean(dist_data),'Standard Deviation': np.std(dist_data),'Skewness' : skew,'Kurtosis' :kurt},ignore_index=True)
-    elif dist_name == "gamma":
-        mean, var, skew, kurt = gamma.stats(dist_data, moments='mvsk')
-        distribution = distribution.append({'Type of Distribution':dist_name,'Mean': np.mean(dist_data),'Standard Deviation': np.std(dist_data),'Skewness' : skew,'Kurtosis' :kurt},ignore_index=True)
-    elif dist_name == 'exponpow':
-        mean, var, skew, kurt = exponpow.stats(dist_data, moments='mvsk')
-        distribution = distribution.append({'Type of Distribution':dist_name,'Mean': np.mean(dist_data),'Standard Deviation': np.std(dist_data),'Skewness' : skew,'Kurtosis' :kurt},ignore_index=True)
+        '''
+        https://www.coursera.org/lecture/compstatsintro/lognormal-distribution-DSdi9
+        https://brilliant.org/wiki/log-normal-distribution/
+        The term "log-normal" comes from the result of taking the logarithm of both sides:
+
+            \log X = \mu +\sigma Z.
+            logX=μ+σZ.
+
+        As Z is normal, \mu+\sigma Zμ+σZ is also normal (the transformations just scale the distribution, 
+        and do not affect normality), meaning that the logarithm of XX is normally distributed 
+        (hence the term log-normal).
+        '''
+        mean_x = np.mean(dist_data)
+        std_x = np.std(dist_data)
+
+        mu = np.exp(mean_x+(std_x**2/2))
+        sig = np.sqrt((np.exp(std_x**2)-1)*(mu**2))
+        m = np.log(mean_x**2/(np.sqrt(mean_x**2+std_x**2)))
+        s = np.log(1+(std_x**2 / mean_x**2))
+        print('Mean {0} : Standard Deviation {1}'.format(m,s))
+        distribution = distribution.append({'Type of Distribution':dist_name,'Mean': m,'Standard Deviation': s,'Skewness' : 0,'Kurtosis' :0},ignore_index=True)
+    # elif dist_name == "gamma":
+    #     mean, var, skew, kurt = gamma.stats(dist_data, moments='mvsk')
+    #     distribution = distribution.append({'Type of Distribution':dist_name,'Mean': np.mean(dist_data),'Standard Deviation': np.std(dist_data),'Skewness' : skew,'Kurtosis' :kurt},ignore_index=True)
+    # elif dist_name == 'exponpow':
+    #     mean, var, skew, kurt = exponpow.stats(dist_data, moments='mvsk')
+    #     distribution = distribution.append({'Type of Distribution':dist_name,'Mean': np.mean(dist_data),'Standard Deviation': np.std(dist_data),'Skewness' : skew,'Kurtosis' :kurt},ignore_index=True)
     elif dist_name == 'norm':
-        mean, var, skew, kurt = norm.stats(dist_data, moments='mvsk')
-        distribution = distribution.append({'Type of Distribution':dist_name,'Mean': np.mean(dist_data),'Standard Deviation':np.std(dist_data),'Skewness' : skew,'Kurtosis' :kurt},ignore_index=True)
-    elif dist_name == 'chi2':
-        mean, var, skew, kurt = chi2.stats(dist_data, moments='mvsk')
-        distribution = distribution.append({'Type of Distribution':dist_name,'Mean': np.mean(dist_data),'Standard Deviation':np.std(dist_data),'Skewness' : skew,'Kurtosis' :kurt},ignore_index=True)
-    elif dist_name == 'invgauss':
-        mean, var, skew, kurt = invgauss.stats(dist_data, moments='mvsk')
-        distribution = distribution.append({'Type of Distribution':dist_name,'Mean': np.mean(dist_data),'Standard Deviation':np.std(dist_data),'Skewness' : skew,'Kurtosis' :kurt},ignore_index=True)
+        distribution = distribution.append({'Type of Distribution':dist_name,'Mean': np.mean(dist_data),'Standard Deviation':np.std(dist_data),'Skewness' : 0,'Kurtosis' :0},ignore_index=True)
+    # elif dist_name == 'chi2':
+    #     mean, var, skew, kurt = chi2.stats(dist_data, moments='mvsk')
+    #     distribution = distribution.append({'Type of Distribution':dist_name,'Mean': np.mean(dist_data),'Standard Deviation':np.std(dist_data),'Skewness' : skew,'Kurtosis' :kurt},ignore_index=True)
+    # elif dist_name == 'invgauss':
+    #     mean, var, skew, kurt = invgauss.stats(dist_data, moments='mvsk')
+    #     distribution = distribution.append({'Type of Distribution':dist_name,'Mean': np.mean(dist_data),'Standard Deviation':np.std(dist_data),'Skewness' : skew,'Kurtosis' :kurt},ignore_index=True)
     elif dist_name == 'expon':
-        mean, var, skew, kurt = expon.stats(dist_data, moments='mvsk')
-        distribution = distribution.append({'Type of Distribution':dist_name,'Mean': np.mean(dist_data),'Standard Deviation':np.std(dist_data),'Skewness' : skew,'Kurtosis' :kurt},ignore_index=True)
+        '''
+        Exponential Distribution:
+            Reference:
+                https://courses.lumenlearning.com/introstats1/chapter/the-exponential-distribution/
+            The exponential distribution is often concerned with the amount of time until some specific event occurs.
+            The exponential distribution is widely used in the field of reliability. Reliability deals with the amount of time a product lasts.
+            The standard deviation, σ, is the same as the mean. μ = σ
+        '''
+        lamda = len(dist_data)
+        mean = 1/lamda
+        sigma = np.sqrt(1/lamda**2)
+        distribution = distribution.append({'Type of Distribution':dist_name,'Mean': mean,'Standard Deviation':sigma,'Skewness' : 0,'Kurtosis' :0},ignore_index=True)
     elif dist_name == 'uniform':
-        mean, var, skew, kurt = uniform.stats(dist_data, moments='mvsk')
-        distribution = distribution.append({'Type of Distribution':dist_name,'Mean': np.mean(dist_data),'Standard Deviation':np.std(dist_data),'Skewness' : skew,'Kurtosis' :kurt},ignore_index=True)
-    elif dist_name == 'powerlaw':
-        mean, var, skew, kurt = powerlaw.stats(dist_data, moments='mvsk')
-        distribution = distribution.append({'Type of Distribution':dist_name,'Mean': np.mean(dist_data),'Standard Deviation':np.std(dist_data),'Skewness' : skew,'Kurtosis' :kurt},ignore_index=True)
+        '''
+        
+        '''
+        max_val = np.max(dist_data)
+        min_val = np.min(dist_data)
+        mean = (max_val + min_val)/2
+        sigma = np.sqrt(((min_val - max_val)**2)*(1/12))
+        distribution = distribution.append({'Type of Distribution':dist_name,'Mean': mean,'Standard Deviation': sigma,'Skewness' : 0,'Kurtosis' :0},ignore_index=True)
+    # elif dist_name == 'powerlaw':
+    #     mean, var, skew, kurt = powerlaw.stats(dist_data, moments='mvsk')
+    #     distribution = distribution.append({'Type of Distribution':dist_name,'Mean': np.mean(dist_data),'Standard Deviation':np.std(dist_data),'Skewness' : skew,'Kurtosis' :kurt},ignore_index=True)
     elif dist_name == 'triang':
-        mean, var, skew, kurt = triang.stats(dist_data, moments='mvsk')
-        distribution = distribution.append({'Type of Distribution':dist_name,'Mean': np.mean(dist_data),'Standard Deviation':np.std(dist_data),'Skewness' : skew,'Kurtosis' :kurt},ignore_index=True)
+        '''
+        Refence:
+        https://www.statisticshowto.com/triangular-distribution/
+        '''
+        peak_val = np.mean(dist_data)
+        max_val = np.amax(dist_data)
+        min_val = np.amin(dist_data)
+        mean = (max_val + peak_val + min_val)/3
+        sigma = (1/np.sqrt(6))*max_val
+        distribution = distribution.append({'Type of Distribution':dist_name,'Mean': mean,'Standard Deviation':sigma,'Skewness' : 0,'Kurtosis' :0},ignore_index=True)
     return distribution,result
 # x_y,results = fit_distribution('year',0.99,0.01)
-dist_names = ['lognorm','triang','norm','chi2','invgauss','uniform','gamma','expon','lognorm','powerlaw','exponpow']
-
+dist_names = ['lognorm','norm','expon','triang','uniform']
+#dist_names = ['lognorm','triang','norm','chi2','invgauss','uniform','gamma','expon','lognorm','powerlaw']
 def  method_stats(dist_data):
     data = dist_data.transpose()
     distribution = pd.DataFrame(columns=('Type of Distribution','Mean','Standard Deviation','Skewness','Kurtosis'))
@@ -134,3 +173,8 @@ def get_distributions():
             distributions.append(this)
     return distributions
 
+'''
+Notes:
+    1) Do with a window of points instead of a single point. 
+    2) Distance between distribution
+'''
