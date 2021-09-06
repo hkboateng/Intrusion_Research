@@ -95,15 +95,19 @@ def calculate_dis_props(dist_data, distribution):
         and do not affect normality), meaning that the logarithm of XX is normally distributed 
         (hence the term log-normal).
         '''
-        mean_x = np.mean(dist_data)
-        std_x = np.std(dist_data)
+        min_val = np.min(dist_data)
+        small_val = 1e-30
+        epsilon = min_val + small_val
+        dist_data = dist_data + epsilon
+        print('Min value {0}; Epsilon val {1}; Sum {2}'.format(min_val,small_val, epsilon))
+        mean_x = np.mean(np.log(dist_data))
+        std_x = np.std(np.log(dist_data))
 
         mu = np.exp(mean_x+(std_x**2/2))
         sig = np.sqrt((np.exp(std_x**2)-1)*(mu**2))
         m = np.log(mean_x**2/(np.sqrt(mean_x**2+std_x**2)))
         s = np.log(1+(std_x**2 / mean_x**2))
-        print('Mean {0} : Standard Deviation {1}'.format(m,s))
-        distribution = distribution.append({'Type of Distribution':dist_name,'Mean': m,'Standard Deviation': s,'Skewness' : 0,'Kurtosis' :0},ignore_index=True)
+        distribution = distribution.append({'Type of Distribution':dist_name,'Mean': mu,'Standard Deviation': sig,'Skewness' : epsilon,'Kurtosis' :min_val},ignore_index=True)
     # elif dist_name == "gamma":
     #     mean, var, skew, kurt = gamma.stats(dist_data, moments='mvsk')
     #     distribution = distribution.append({'Type of Distribution':dist_name,'Mean': np.mean(dist_data),'Standard Deviation': np.std(dist_data),'Skewness' : skew,'Kurtosis' :kurt},ignore_index=True)
@@ -135,11 +139,12 @@ def calculate_dis_props(dist_data, distribution):
         '''
         
         '''
+        print("Uniform: {0}".format(dist_data))
         max_val = np.max(dist_data)
         min_val = np.min(dist_data)
         mean = (max_val + min_val)/2
         sigma = np.sqrt(((min_val - max_val)**2)*(1/12))
-        distribution = distribution.append({'Type of Distribution':dist_name,'Mean': mean,'Standard Deviation': sigma,'Skewness' : 0,'Kurtosis' :0},ignore_index=True)
+        distribution = distribution.append({'Type of Distribution':dist_name,'Mean': mean,'Standard Deviation': sigma,'Skewness' : min_val,'Kurtosis' :max_val},ignore_index=True)
     # elif dist_name == 'powerlaw':
     #     mean, var, skew, kurt = powerlaw.stats(dist_data, moments='mvsk')
     #     distribution = distribution.append({'Type of Distribution':dist_name,'Mean': np.mean(dist_data),'Standard Deviation':np.std(dist_data),'Skewness' : skew,'Kurtosis' :kurt},ignore_index=True)
@@ -153,10 +158,13 @@ def calculate_dis_props(dist_data, distribution):
         min_val = np.amin(dist_data)
         mean = (max_val + peak_val + min_val)/3
         sigma = (1/np.sqrt(6))*max_val
-        distribution = distribution.append({'Type of Distribution':dist_name,'Mean': mean,'Standard Deviation':sigma,'Skewness' : 0,'Kurtosis' :0},ignore_index=True)
+        variance = (max_val**2+min_val**2+peak_val**2-(max_val*min_val)-(max_val*peak_val)-(min_val*peak_val))/18
+        sig = np.sqrt(variance)
+        print('Comparing Triangular dist standard deviation: {0} : {1}'.format(sig, sigma))
+        distribution = distribution.append({'Type of Distribution':dist_name,'Mean': mean,'Standard Deviation':sig,'Skewness' : 0,'Kurtosis' :0},ignore_index=True)
     return distribution,result
 # x_y,results = fit_distribution('year',0.99,0.01)
-dist_names = ['lognorm','norm','expon','triang','uniform']
+dist_names = ['norm', 'lognorm','uniform']
 #dist_names = ['lognorm','triang','norm','chi2','invgauss','uniform','gamma','expon','lognorm','powerlaw']
 def  method_stats(dist_data):
     data = dist_data.transpose()
