@@ -35,15 +35,12 @@ def calculateFITSAnomaly(train_distributions, test_activations):
         train_mean = data['Mean']
         tr_std = data['Standard Deviation']
         dist_name = data['Type of Distribution']
-        
-        print('Standard Deviation for {0} {1}; Mean : {2}'.format(dist_name, tr_std, train_mean))
-        #print(test)
+
         if dist_name == "lognorm":
-            epsilon = data['Skewness']
-            print('Epsilon {0}'.format(epsilon))
+            epsilon = data['Epsilon']
             norm_data = np.float64(test + epsilon)
             normalized_data_log  = np.log(norm_data)
-
+            
             total = np.sum(((train_mean - (degree_of_freedom * tr_std)) < normalized_data_log) & (normalized_data_log < (train_mean + (degree_of_freedom * tr_std))))
 
             if np.float64(total/moni_width) < anomaly_threshold:
@@ -58,20 +55,24 @@ def calculateFITSAnomaly(train_distributions, test_activations):
 
             '''
             uniform_data = test - train_mean
-            total_sum = ((-tr_std * np.sqrt(3)) <= uniform_data) & (test < (tr_std * np.sqrt(3)))
+            total_sum = ((-tr_std * np.sqrt(3)) <= uniform_data) & (uniform_data <= (tr_std * np.sqrt(3)))
             if np.float64(sum(total_sum)/moni_width) < anomaly_threshold:
                 defect_count  += 1
                 print("Anomaly.. distribution: {}".format(dist_name))
-            # else:
-            #     print("Not Anomaly.. distribution: {}".format(dist_name))
+            else:
+                print("Not Anomaly.. distribution: {}".format(dist_name))
+        elif dist_name == 'triang':
+            peak_val = np.mean(test)
+            max_val = np.amax(test)
+            min_val = np.amin(test)
+            f_fxn = (peak_val - min_val)/(max_val - min_val)
         else:
             total_sum = ((train_mean - (degree_of_freedom * tr_std)) < test) & (test < (train_mean + (degree_of_freedom * tr_std)))
-            print(test)
             if np.float64(sum(total_sum)/moni_width) < anomaly_threshold:
                 defect_count  += 1
                 print("Anomaly.. distribution: {}".format(dist_name))
-            #else:
-                #print("Not Anomaly.. distribution: {}".format(dist_name))
+            else:
+                print("Not Anomaly.. distribution: {}".format(dist_name))
         print("<","*"*25,">")
     return defect_count
 
@@ -256,12 +257,12 @@ def generate_class_model(dataset_df,individual_model=False, training_mode= True,
             print("-"*10,">  Saving Normalizer, Label Encoder and OneHotEncoder")
             save_train_preprocessing_paramters('all_filtered.joblib', hotEncoder, normalizer, labelEncoder )
             print("-"*10,">Saving Normalizer and OneHotEncoder complete")
-            #model = loadDNNModel("models/model_all_filtered")
-            model = anomaly_model(processed_dataset.shape[1])
-            model.fit(processed_dataset,processed_labels,epochs=epochs)
-            print("-"*10,">Saving Trained Model")
-            saveDNNModel(model, "models/model_all_filtered")
-            print("-"*10,">Trained model saved")
+            model = loadDNNModel("models/model_all_filtered")
+            # model = anomaly_model(processed_dataset.shape[1])
+            # model.fit(processed_dataset,processed_labels,epochs=epochs)
+            # print("-"*10,">Saving Trained Model")
+            # saveDNNModel(model, "models/model_all_filtered")
+            # print("-"*10,">Trained model saved")
             print("-"*10,">Generating Monitoring node distributions","-"*10)
 
             monitoring_node = get_monitoring_node(model, node=monitoring_node)
@@ -269,7 +270,7 @@ def generate_class_model(dataset_df,individual_model=False, training_mode= True,
 
             train_distributions = method_stats(train_node.numpy())
             save_data("distributions",'train_distributions.joblib', train_distributions)
-
+            return train_distributions
         else:
             x_test,_ = generate_test_dataset(dataset_df,'all_filtered.joblib')
 
@@ -279,7 +280,7 @@ def generate_class_model(dataset_df,individual_model=False, training_mode= True,
             defect_count = calculateFITSAnomaly(train_distributions, test_monitoring_node.numpy())
 
             print('Anamoly Detected for class is: {:.2f}%'.format((defect_count/test_monitoring_node.shape[1])*100))
-            return test_monitoring_node
+            return test_monitoring_node,train_distributions
 
 def getMonitoringNode(model=None, modelName=None,node=None, dataset=None):
     if model == None:
@@ -318,7 +319,7 @@ test_df = test_data
 train_labels = train_data.iloc[:,41]
 test_labels = test_data.iloc[:,41]
 
-monitoring_node = "softmax"
+monitoring_node = "batch2"
 
 num_classes = len(list(set(train_labels)))
 
@@ -333,10 +334,10 @@ unique_vals_test_train = list(set(unique_test_labels)-set(unique_train_labels))
 test_data_filter = test_df.loc[test_df.iloc[:,41].isin(unique_vals_test_train)]
 individual_model = False
 training_mode = False
-#generate_class_model(train_df, individual_model, epochs=10,monitoring_node=monitoring_node)
+train_distributions = generate_class_model(train_df, individual_model, epochs=20,monitoring_node=monitoring_node)
 
 
-test_node = generate_class_model(train_df, individual_model,training_mode,train_classes= unique_train_labels,monitoring_node=monitoring_node)
+test_node, train_distributions_test = generate_class_model(test_data_filter, individual_model,training_mode,train_classes= unique_train_labels,monitoring_node=monitoring_node)
 test_node_data = test_node.numpy()
 
 '''

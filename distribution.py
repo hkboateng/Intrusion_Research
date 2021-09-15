@@ -10,10 +10,11 @@ import pandas as pd
 import numpy as np
 # from mlutils import dataset, connector
 import scipy.stats
-
+from scipy.stats import triang
+from scipy import stats
 from sklearn.preprocessing import StandardScaler
 
-
+from fitter import Fitter
 def standardise(column,pct,pct_lower):
     sc = StandardScaler() 
    # x_y = vehicle_data[column][vehicle_data[column].notnull()]
@@ -38,12 +39,14 @@ def fit_distribution(column,pct,pct_lower):
     # 11 equi-distant bins of observed Data 
     percentile_bins = np.linspace(0,100,11)
     percentile_cutoffs = np.percentile(y_std, percentile_bins)
-    try:
-        observed_frequency, bins = (np.histogram(y_std, bins=percentile_cutoffs))
-        #print('observed_frequency Length: {}, bin {}'.format(len(observed_frequency), len(bins)) )
-    except ValueError:
-        #print("ValueError")
-        observed_frequency, bins = (np.histogram(y_std, bins=10))
+    percentile_cutoffs.sort()
+    observed_frequency, bins = (np.histogram(y_std, bins=percentile_cutoffs))
+    # try:
+    #     observed_frequency, bins = (np.histogram(y_std, bins=percentile_cutoffs))
+    #     #print('observed_frequency Length: {}, bin {}'.format(len(observed_frequency), len(bins)) )
+    # except ValueError:
+    #     #print("ValueError")
+    #     observed_frequency, bins = (np.histogram(y_std, bins=10))
         
     cum_observed_frequency = np.cumsum(observed_frequency)
     # Loop through candidate distributions
@@ -64,7 +67,12 @@ def fit_distribution(column,pct,pct_lower):
         # Chi-square Statistics
         expected_frequency = np.array(expected_frequency) * size
         cum_expected_frequency = np.cumsum(expected_frequency)
-
+        
+        ###### Normalize #####
+        # small_value = 0.001
+        # cum_expected_frequency = cum_expected_frequency + small_value
+        # cum_observed_frequency = cum_observed_frequency + small_value
+        #print('cum_expected_frequency: {0} cum_observed_frequency: {1}'.format(cum_expected_frequency,cum_observed_frequency))
         ss = sum (((cum_expected_frequency - cum_observed_frequency) ** 2) / cum_observed_frequency)
         chi_square_statistics.append(ss)
 
@@ -78,10 +86,16 @@ def fit_distribution(column,pct,pct_lower):
     return results
 
 def calculate_dis_props(dist_data, distribution):
-
-    result = fit_distribution(dist_data, 0.99, 0.01)
-    dist_name = result.iloc[0]['Distribution']
-
+    f = Fitter(dist_data, distributions=['lognorm','uniform', 'norm'])
+    f.fit()
+    results = f.summary()
+    dist_name = results.iloc[0].name
+    #print(results.columns)
+    # result = fit_distribution(dist_data, 0.99, 0.01)
+    # dist_name = result.iloc[0]['Distribution']
+    # print('%'*30)
+    # print(result)
+    # print('%'*30)
     if dist_name == "lognorm":
         '''
         https://www.coursera.org/lecture/compstatsintro/lognormal-distribution-DSdi9
@@ -96,18 +110,18 @@ def calculate_dis_props(dist_data, distribution):
         (hence the term log-normal).
         '''
         min_val = np.min(dist_data)
-        small_val = 1e-30
+        small_val = 1e-13
         epsilon = min_val + small_val
         dist_data = dist_data + epsilon
-        print('Min value {0}; Epsilon val {1}; Sum {2}'.format(min_val,small_val, epsilon))
+
         mean_x = np.mean(np.log(dist_data))
         std_x = np.std(np.log(dist_data))
-
+        #print('Min value {0}; Epsilon val {1}; Small Val {2}'.format(min_val,std_x, small_val))
         mu = np.exp(mean_x+(std_x**2/2))
         sig = np.sqrt((np.exp(std_x**2)-1)*(mu**2))
         m = np.log(mean_x**2/(np.sqrt(mean_x**2+std_x**2)))
         s = np.log(1+(std_x**2 / mean_x**2))
-        distribution = distribution.append({'Type of Distribution':dist_name,'Mean': mu,'Standard Deviation': sig,'Skewness' : epsilon,'Kurtosis' :min_val},ignore_index=True)
+        distribution = distribution.append({'Type of Distribution':dist_name,'Mean': m,'Standard Deviation': s,'Epsilon' : epsilon,'Kurtosis' :min_val},ignore_index=True)
     # elif dist_name == "gamma":
     #     mean, var, skew, kurt = gamma.stats(dist_data, moments='mvsk')
     #     distribution = distribution.append({'Type of Distribution':dist_name,'Mean': np.mean(dist_data),'Standard Deviation': np.std(dist_data),'Skewness' : skew,'Kurtosis' :kurt},ignore_index=True)
@@ -136,10 +150,6 @@ def calculate_dis_props(dist_data, distribution):
         sigma = np.sqrt(1/lamda**2)
         distribution = distribution.append({'Type of Distribution':dist_name,'Mean': mean,'Standard Deviation':sigma,'Skewness' : 0,'Kurtosis' :0},ignore_index=True)
     elif dist_name == 'uniform':
-        '''
-        
-        '''
-        print("Uniform: {0}".format(dist_data))
         max_val = np.max(dist_data)
         min_val = np.min(dist_data)
         mean = (max_val + min_val)/2
@@ -159,28 +169,42 @@ def calculate_dis_props(dist_data, distribution):
         mean = (max_val + peak_val + min_val)/3
         sigma = (1/np.sqrt(6))*max_val
         variance = (max_val**2+min_val**2+peak_val**2-(max_val*min_val)-(max_val*peak_val)-(min_val*peak_val))/18
-        sig = np.sqrt(variance)
-        print('Comparing Triangular dist standard deviation: {0} : {1}'.format(sig, sigma))
-        distribution = distribution.append({'Type of Distribution':dist_name,'Mean': mean,'Standard Deviation':sig,'Skewness' : 0,'Kurtosis' :0},ignore_index=True)
-    return distribution,result
+        #sig = np.sqrt(variance)
+        #print('Comparing Triangular dist standard deviation: {0} : {1}'.format(sig, sigma))
+        distribution = distribution.append({'Type of Distribution':dist_name,'Mean': mean,'Standard Deviation':sigma,'Skewness' : 0,'Kurtosis' :0},ignore_index=True)
+    return distribution
 # x_y,results = fit_distribution('year',0.99,0.01)
 dist_names = ['norm', 'lognorm','uniform']
 #dist_names = ['lognorm','triang','norm','chi2','invgauss','uniform','gamma','expon','lognorm','powerlaw']
 def  method_stats(dist_data):
     data = dist_data.transpose()
-    distribution = pd.DataFrame(columns=('Type of Distribution','Mean','Standard Deviation','Skewness','Kurtosis'))
+    distribution = pd.DataFrame(columns=('Type of Distribution','Mean','Standard Deviation','Epsilon','Skewness','Kurtosis'))
     for i in data:
-        distribution, result = calculate_dis_props(i, distribution)
+        distribution = calculate_dis_props(i, distribution)
     return distribution
 
-@staticmethod
-def get_distributions():
-    distributions = []
-    for this in dir(scipy.stats):
-        if "fit" in eval("dir(scipy.stats." + this + ")"):
-            distributions.append(this)
-    return distributions
 
+def test_distribution():
+    data = stats.gamma.rvs(2, loc=1.5, scale=2, size=10000)
+    print(data)
+    f = Fitter(data, distributions=['gamma','norm','lognorm'])
+    f.fit()
+    # may take some time since by default, all distributions are tried
+    # but you call manually provide a smaller set of distributions
+    results = f.summary()
+    print(results)
+    print(results.iloc[0].name)
+    assert results.iloc[0].name == "gamma", "Distribution name Gamma is correct"
+    c = 0.158
+    f = None
+    r = stats.triang.rvs(c, size=1000)
+    f = Fitter(r, distributions=['gamma','norm','lognorm','triang'])
+    f.fit()
+    results = f.summary()
+    print(results)
+    print(results.iloc[0].name)
+    assert results.iloc[0].name == "triang", "Distribution name Triang  is correct"
+# test_distribution()
 '''
 Notes:
     1) Do with a window of points instead of a single point. 
