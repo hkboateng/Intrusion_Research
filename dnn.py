@@ -18,6 +18,7 @@ import pandas as pd
 
 import seaborn as sns
 from sklearn.metrics import confusion_matrix
+from sklearn.model_selection import train_test_split
 
 def calculateFITSAnomaly(train_distributions, test_activations):
     anomaly_threshold = np.float64(0.95)
@@ -35,15 +36,15 @@ def calculateFITSAnomaly(train_distributions, test_activations):
         train_mean = data['Mean']
         tr_std = data['Standard Deviation']
         dist_name = data['Type of Distribution']
-        
-        print('Standard Deviation for {0} {1}; Mean : {2}'.format(dist_name, tr_std, train_mean))
-        #print(test)
-        if dist_name == "lognorm":
-            epsilon = data['Skewness']
-            print('Epsilon {0}'.format(epsilon))
-            norm_data = np.float64(test + epsilon)
-            normalized_data_log  = np.log(norm_data)
 
+        if dist_name == "lognorm":
+            epsilon = data['Epsilon']
+            test_data_abs  = np.abs(test)
+            norm_data = np.float64(test_data_abs + epsilon)
+            normalized_data_log  = np.log(norm_data)
+            norm_data_z = (normalized_data_log- train_mean)/tr_std
+            
+            #print('Min val: {0} epsilon {1} Count Nan {2}'.format(np.min(test), norm_data, sum(np.isinf(normalized_data_log))))
             total = np.sum(((train_mean - (degree_of_freedom * tr_std)) < normalized_data_log) & (normalized_data_log < (train_mean + (degree_of_freedom * tr_std))))
 
             if np.float64(total/moni_width) < anomaly_threshold:
@@ -58,20 +59,24 @@ def calculateFITSAnomaly(train_distributions, test_activations):
 
             '''
             uniform_data = test - train_mean
-            total_sum = ((-tr_std * np.sqrt(3)) <= uniform_data) & (test < (tr_std * np.sqrt(3)))
+            total_sum = ((-tr_std * np.sqrt(3)) <= uniform_data) & (uniform_data <= (tr_std * np.sqrt(3)))
             if np.float64(sum(total_sum)/moni_width) < anomaly_threshold:
                 defect_count  += 1
                 print("Anomaly.. distribution: {}".format(dist_name))
-            # else:
-            #     print("Not Anomaly.. distribution: {}".format(dist_name))
+            else:
+                print("Not Anomaly.. distribution: {}".format(dist_name))
+        elif dist_name == 'triang':
+            peak_val = np.mean(test)
+            max_val = np.amax(test)
+            min_val = np.amin(test)
+            f_fxn = (peak_val - min_val)/(max_val - min_val)
         else:
             total_sum = ((train_mean - (degree_of_freedom * tr_std)) < test) & (test < (train_mean + (degree_of_freedom * tr_std)))
-            print(test)
             if np.float64(sum(total_sum)/moni_width) < anomaly_threshold:
                 defect_count  += 1
                 print("Anomaly.. distribution: {}".format(dist_name))
-            #else:
-                #print("Not Anomaly.. distribution: {}".format(dist_name))
+            else:
+                print("Not Anomaly.. distribution: {}".format(dist_name))
         print("<","*"*25,">")
     return defect_count
 
@@ -103,7 +108,7 @@ def anomaly_model(train_data_shape):
     input_data = tf.keras.Input(shape=(train_data_shape,))
     inputs = keras.layers.Dense(1024, activation="relu", name="dense1")(input_data)
     inputs = keras.layers.BatchNormalization(name="batch1")(inputs)
-    inputs = keras.layers.Dense(1024, activation='relu', name="dense2")(inputs)
+    inputs = keras.layers.Dense(512, activation='relu', name="dense2")(inputs)
     inputs = keras.layers.BatchNormalization(name="batch2")(inputs)
     outputs = keras.layers.Dense(23, activation=tf.nn.softmax, name="softmax")(inputs)
     model = tf.keras.Model(inputs=input_data, outputs=outputs, name="test_model")
@@ -256,7 +261,7 @@ def generate_class_model(dataset_df,individual_model=False, training_mode= True,
             print("-"*10,">  Saving Normalizer, Label Encoder and OneHotEncoder")
             save_train_preprocessing_paramters('all_filtered.joblib', hotEncoder, normalizer, labelEncoder )
             print("-"*10,">Saving Normalizer and OneHotEncoder complete")
-            #model = loadDNNModel("models/model_all_filtered")
+            # model = loadDNNModel("models/model_all_filtered")
             model = anomaly_model(processed_dataset.shape[1])
             model.fit(processed_dataset,processed_labels,epochs=epochs)
             print("-"*10,">Saving Trained Model")
@@ -269,7 +274,7 @@ def generate_class_model(dataset_df,individual_model=False, training_mode= True,
 
             train_distributions = method_stats(train_node.numpy())
             save_data("distributions",'train_distributions.joblib', train_distributions)
-
+            return train_distributions
         else:
             x_test,_ = generate_test_dataset(dataset_df,'all_filtered.joblib')
 
@@ -279,7 +284,7 @@ def generate_class_model(dataset_df,individual_model=False, training_mode= True,
             defect_count = calculateFITSAnomaly(train_distributions, test_monitoring_node.numpy())
 
             print('Anamoly Detected for class is: {:.2f}%'.format((defect_count/test_monitoring_node.shape[1])*100))
-            return test_monitoring_node
+            return test_monitoring_node,train_distributions
 
 def getMonitoringNode(model=None, modelName=None,node=None, dataset=None):
     if model == None:
@@ -317,7 +322,7 @@ train_df = train_data
 test_df = test_data
 train_labels = train_data.iloc[:,41]
 test_labels = test_data.iloc[:,41]
-
+X_train, y_train, X_test, y_test = train_test_split(train_df,train_labels, train_size=0.35, random_state=42)
 monitoring_node = "softmax"
 
 num_classes = len(list(set(train_labels)))
@@ -333,11 +338,11 @@ unique_vals_test_train = list(set(unique_test_labels)-set(unique_train_labels))
 test_data_filter = test_df.loc[test_df.iloc[:,41].isin(unique_vals_test_train)]
 individual_model = False
 training_mode = False
-#generate_class_model(train_df, individual_model, epochs=10,monitoring_node=monitoring_node)
+train_distributions = generate_class_model(X_train, individual_model, epochs=20,monitoring_node=monitoring_node)
 
 
-test_node = generate_class_model(train_df, individual_model,training_mode,train_classes= unique_train_labels,monitoring_node=monitoring_node)
-test_node_data = test_node.numpy()
+test_node, train_distributions_test = generate_class_model(test_data_filter, individual_model,training_mode,train_classes= unique_train_labels,monitoring_node=monitoring_node)
+X_traintest_node_data = test_node.numpy()
 
 '''
 Meeting Notes - 09/03/2021
