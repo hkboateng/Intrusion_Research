@@ -18,7 +18,11 @@ import pandas as pd
 
 import seaborn as sns
 from sklearn.metrics import confusion_matrix
+
 from sklearn.feature_extraction.text import CountVectorizer
+
+from sklearn.model_selection import train_test_split
+
 def calculateFITSAnomaly(train_distributions, test_activations):
     anomaly_threshold = np.float64(0.5)
     
@@ -40,9 +44,16 @@ def calculateFITSAnomaly(train_distributions, test_activations):
 
         if dist_name == "lognorm":
             epsilon = data['Epsilon']
+
             norm_data = np.float64(test + epsilon)
             normalized_data_log  = np.log(norm_data)
+            test_data_abs  = np.abs(test)
+            norm_data = np.float64(test_data_abs + epsilon)
+            normalized_data_log  = np.log(norm_data)
+            norm_data_z = (normalized_data_log- train_mean)/tr_std
             
+            #print('Min val: {0} epsilon {1} Count Nan {2}'.format(np.min(test), norm_data, sum(np.isinf(normalized_data_log))))
+
             total = np.sum(((train_mean - (degree_of_freedom * tr_std)) < normalized_data_log) & (normalized_data_log < (train_mean + (degree_of_freedom * tr_std))))
 
             if np.float64(total/moni_width) < anomaly_threshold:
@@ -106,7 +117,7 @@ def anomaly_model(train_data_shape):
     input_data = tf.keras.Input(shape=(train_data_shape,))
     inputs = keras.layers.Dense(1024, activation="relu", name="dense1")(input_data)
     inputs = keras.layers.BatchNormalization(name="batch1")(inputs)
-    inputs = keras.layers.Dense(1024, activation='relu', name="dense2")(inputs)
+    inputs = keras.layers.Dense(512, activation='relu', name="dense2")(inputs)
     inputs = keras.layers.BatchNormalization(name="batch2")(inputs)
     outputs = keras.layers.Dense(23, activation=tf.nn.softmax, name="softmax")(inputs)
     model = tf.keras.Model(inputs=input_data, outputs=outputs, name="test_model")
@@ -321,7 +332,7 @@ train_df = train_data
 test_df = test_data
 train_labels = train_data.iloc[:,41]
 test_labels = test_data.iloc[:,41]
-
+X_train, y_train, X_test, y_test = train_test_split(train_df,train_labels, train_size=0.35, random_state=42)
 monitoring_node = "softmax"
 
 num_classes = len(list(set(train_labels)))
@@ -338,6 +349,9 @@ test_data_filter = test_df.loc[test_df.iloc[:,41].isin(unique_vals_test_train)]
 individual_model = False
 training_mode = False
 
+train_distributions = generate_class_model(X_train, individual_model, epochs=20,monitoring_node=monitoring_node)
+
+
 train_df_protocol_types = list(set(train_df.iloc[:,1]))
 train_df_services = list(set(train_df.iloc[:,2]))
 train_df_flag = list(set(train_df.iloc[:,3]))
@@ -350,12 +364,12 @@ train_df_protocol_types_onehot = one_hot_protocol.fit_transform(train_df.iloc[:,
 train_df_services_onehot = one_hot_services.fit_transform(train_df.iloc[:,2].values)
 train_df_flag_onehot = one_hot_flag.fit_transform(train_df.iloc[:,3].values)
 
-
 train_distributions = generate_class_model(train_df, individual_model, epochs=1,monitoring_node=monitoring_node)
 
 
 test_node, train_distributions_test = generate_class_model(test_data_filter, individual_model,training_mode,train_classes= unique_train_labels,monitoring_node=monitoring_node)
 # test_node_data = test_node.numpy()
+
 
 '''
 Meeting Notes - 09/03/2021
