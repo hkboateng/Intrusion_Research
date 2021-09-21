@@ -18,11 +18,16 @@ import pandas as pd
 
 import seaborn as sns
 from sklearn.metrics import confusion_matrix
+
+from sklearn.feature_extraction.text import CountVectorizer
+
 from sklearn.model_selection import train_test_split
 
 def calculateFITSAnomaly(train_distributions, test_activations):
-    anomaly_threshold = np.float64(0.95)
-
+    anomaly_threshold = np.float64(0.5)
+    
+    lognormal = []
+    lognormal_count = 0
     degree_of_freedom = 1
     defect_count = 0;
     #print('Size of Test Activations : {}'.format(len(test_activations)))
@@ -39,12 +44,16 @@ def calculateFITSAnomaly(train_distributions, test_activations):
 
         if dist_name == "lognorm":
             epsilon = data['Epsilon']
+
+            norm_data = np.float64(test + epsilon)
+            normalized_data_log  = np.log(norm_data)
             test_data_abs  = np.abs(test)
             norm_data = np.float64(test_data_abs + epsilon)
             normalized_data_log  = np.log(norm_data)
             norm_data_z = (normalized_data_log- train_mean)/tr_std
             
             #print('Min val: {0} epsilon {1} Count Nan {2}'.format(np.min(test), norm_data, sum(np.isinf(normalized_data_log))))
+
             total = np.sum(((train_mean - (degree_of_freedom * tr_std)) < normalized_data_log) & (normalized_data_log < (train_mean + (degree_of_freedom * tr_std))))
 
             if np.float64(total/moni_width) < anomaly_threshold:
@@ -59,7 +68,7 @@ def calculateFITSAnomaly(train_distributions, test_activations):
 
             '''
             uniform_data = test - train_mean
-            total_sum = ((-tr_std * np.sqrt(3)) <= uniform_data) & (uniform_data <= (tr_std * np.sqrt(3)))
+            total_sum = ((-(tr_std * np.sqrt(3))) <= uniform_data) & (uniform_data <= (tr_std * np.sqrt(3)))
             if np.float64(sum(total_sum)/moni_width) < anomaly_threshold:
                 defect_count  += 1
                 print("Anomaly.. distribution: {}".format(dist_name))
@@ -123,6 +132,7 @@ def anomaly_model(train_data_shape):
 # history = model.fit(x_train,y_train,epochs=500, validation_split=0.2)
 
 def process_dataset(train_dataSet,  class_labels, hotEncoder=None, normalizer=None):
+    
     
     encoder = LabelEncoder()
     if hotEncoder == None:
@@ -338,11 +348,28 @@ unique_vals_test_train = list(set(unique_test_labels)-set(unique_train_labels))
 test_data_filter = test_df.loc[test_df.iloc[:,41].isin(unique_vals_test_train)]
 individual_model = False
 training_mode = False
+
 train_distributions = generate_class_model(X_train, individual_model, epochs=20,monitoring_node=monitoring_node)
 
 
+train_df_protocol_types = list(set(train_df.iloc[:,1]))
+train_df_services = list(set(train_df.iloc[:,2]))
+train_df_flag = list(set(train_df.iloc[:,3]))
+
+one_hot_protocol = CountVectorizer(vocabulary=train_df_protocol_types, binary=True)
+one_hot_services = CountVectorizer(vocabulary=train_df_services, binary=True)
+one_hot_flag = CountVectorizer(vocabulary=train_df_flag, binary=True)
+
+train_df_protocol_types_onehot = one_hot_protocol.fit_transform(train_df.iloc[:,1].values)
+train_df_services_onehot = one_hot_services.fit_transform(train_df.iloc[:,2].values)
+train_df_flag_onehot = one_hot_flag.fit_transform(train_df.iloc[:,3].values)
+
+train_distributions = generate_class_model(train_df, individual_model, epochs=1,monitoring_node=monitoring_node)
+
+
 test_node, train_distributions_test = generate_class_model(test_data_filter, individual_model,training_mode,train_classes= unique_train_labels,monitoring_node=monitoring_node)
-X_traintest_node_data = test_node.numpy()
+# test_node_data = test_node.numpy()
+
 
 '''
 Meeting Notes - 09/03/2021
