@@ -24,7 +24,7 @@ from sklearn.feature_extraction.text import CountVectorizer
 from sklearn.model_selection import train_test_split
 
 def calculateFITSAnomaly(train_distributions, test_activations):
-    anomaly_threshold = np.float64(0.95)
+    anomaly_threshold = np.float64(0.5)
     
     lognormal = []
     lognormal_count = 0
@@ -135,18 +135,21 @@ def anomaly_model(train_data_shape):
 
 # history = model.fit(x_train,y_train,epochs=500, validation_split=0.2)
 
-def process_dataset(train_dataSet,  class_labels, hotEncoder=None, normalizer=None):
+def process_dataset(train_dataSet,  class_labels, hotEncoder=None, normalizer=None, labelEncoder=None):
     
     
-    encoder = LabelEncoder()
+
     if hotEncoder == None:
         hotEncoder = OneHotEncoder(handle_unknown='ignore')
 
     if normalizer == None:
         normalizer = Normalizer()
+    
+    if labelEncoder == None:
+        labelEncoder = LabelEncoder()
     htTrain = hotEncoder.fit_transform(train_dataSet)
 
-    encoded_labels = encoder.fit_transform(class_labels)
+    encoded_labels = labelEncoder.fit_transform(class_labels)
     
     train_X = normalizer.fit_transform(htTrain)
     
@@ -156,7 +159,7 @@ def process_dataset(train_dataSet,  class_labels, hotEncoder=None, normalizer=No
     x_train = convert_sparse_matrix_to_sparse_tensor(train_X)
 
 
-    return x_train, y_train, hotEncoder, normalizer,encoder
+    return x_train, y_train, hotEncoder, normalizer,labelEncoder
 
 def process_individual_dataset(train_dataSet, class_labels):
     encoder = LabelEncoder()
@@ -177,8 +180,8 @@ def process_individual_dataset(train_dataSet, class_labels):
     return x_train, y_train,hotEncoder,normalizer,encoder
 
 def save_train_preprocessing_paramters(filename_df, oneHotEncoder, normalizer,labelEncoder):
-    preprocessor_df = pd.DataFrame(columns=('Class Label','HotEncoder','Normalizer', 'Label Encoder'))
-    preprocessor_df = preprocessor_df.append({'Class Label': filename_df,  'HotEncoder': oneHotEncoder, 'Normalizer': normalizer, 'Label Encoder': labelEncoder},ignore_index=True)
+    preprocessor_df = pd.DataFrame(columns=('Class Label','HotEncoder','Normalizer', 'LabelEncoder'))
+    preprocessor_df = preprocessor_df.append({'Class Label': filename_df,  'HotEncoder': oneHotEncoder, 'Normalizer': normalizer, 'LabelEncoder': labelEncoder},ignore_index=True)
 
 
     save_data(pathname("optimizers"),filename_df,preprocessor_df)
@@ -226,10 +229,12 @@ def generate_test_dataset(dataset, filename):
 
     oneHotEncoder = preprocessor_df['HotEncoder'][0]
     normalizer= preprocessor_df['Normalizer'][0]
+    labelEncoder = preprocessor_df['LabelEncoder'][0]
     htTest = oneHotEncoder.transform(test_data)
     normTest = normalizer.transform(htTest)
+    #test_labels = labelEncoder.transform(test_labels)
     test_data = convert_sparse_matrix_to_sparse_tensor(normTest)
-    return test_data,test_labels
+    return test_data,test_labels,labelEncoder
 
 def get_monitoring_node(model, node):
     monitoring_node = tf.keras.models.Model(
@@ -283,29 +288,30 @@ def generate_class_model(dataset_df,individual_model=False, training_mode= True,
             # print("-"*10,">Trained model saved")
             print("-"*10,">Generating Monitoring node distributions","-"*10)
 
-            monitoring_node = get_monitoring_node(model, node=monitoring_node)
+            monitoring_node= get_monitoring_node(model, node=monitoring_node)
             train_node = monitoring_node(processed_dataset)
 
             train_distributions = method_stats(train_node.numpy().transpose())
             save_data("distributions",'train_distributions.joblib', train_distributions)
             return train_distributions
         else:
-            x_test,_ = generate_test_dataset(dataset_df,'all_filtered.joblib')
+            x_test,y_test, labelEncoder = generate_test_dataset(dataset_df,'all_filtered.joblib')
 
-            test_monitoring_node = getMonitoringNode(modelName="models/model_all_filtered",node=monitoring_node,dataset=x_test)
+            test_monitoring_node, model = getMonitoringNode(modelName="models/model_all_filtered",node=monitoring_node,dataset=x_test)
             train_distributions = load_data("distributions","train_distributions.joblib")
 
             defect_count = calculateFITSAnomaly(train_distributions, test_monitoring_node.numpy())
 
             print('Anamoly Detected for class is: {:.2f}%'.format((defect_count/test_monitoring_node.shape[1])*100))
-            return test_monitoring_node,train_distributions
+            y_pred = model.predict(x_test)
+            return y_test,y_pred,labelEncoder
 
 def getMonitoringNode(model=None, modelName=None,node=None, dataset=None):
     if model == None:
         model = loadDNNModel(modelName)
         monitored_node = get_monitoring_node(model, node)
         test_monitoring_node = monitored_node(dataset)
-        return test_monitoring_node
+        return test_monitoring_node,model
     else:
         monitored_node = get_monitoring_node(model, node)
         test_monitoring_node = monitored_node(dataset)
@@ -337,7 +343,7 @@ test_df = test_data
 train_labels = train_data.iloc[:,41]
 test_labels = test_data.iloc[:,41]
 
-X_train, y_train, X_test, y_test = train_test_split(train_df,train_labels, train_size=0.35, random_state=42)
+#X_train, y_train, X_test, y_test = train_test_split(train_df,train_labels, train_size=0.35, random_state=42)
 monitoring_node = "softmax"
 
 
@@ -355,7 +361,7 @@ test_data_filter = test_df.loc[test_df.iloc[:,41].isin(unique_vals_test_train)]
 individual_model = False
 training_mode = False
 
-train_distributions = generate_class_model(X_train, individual_model, epochs=20,monitoring_node=monitoring_node)
+#train_distributions = generate_class_model(X_train, individual_model, epochs=20,monitoring_node=monitoring_node)
 
 
 train_df_protocol_types = list(set(train_df.iloc[:,1]))
@@ -373,10 +379,17 @@ train_df_flag_onehot = one_hot_flag.fit_transform(train_df.iloc[:,3].values)
 train_distributions = generate_class_model(train_df, individual_model, epochs=1,monitoring_node=monitoring_node)
 
 
-test_node, train_distributions_test = generate_class_model(test_data_filter, individual_model,training_mode,train_classes= unique_train_labels,monitoring_node=monitoring_node)
+y_test,y_pred, labelEncoder = generate_class_model(test_data_filter, individual_model,training_mode,train_classes= unique_train_labels,monitoring_node=monitoring_node)
 # test_node_data = test_node.numpy()
 
+output = tf.argmax(y_pred, axis=1, output_type=tf.int32)
+output_labelencode = output.numpy()
 
+output_labels = labelEncoder.inverse_transform(output_labelencode)
+y_test_labels = np.reshape(y_test.values,(-1,1))
+output_labels = np.reshape(output_labels, (-1,1))
+accuracy_count = np.sum(y_test_labels == output_labels)
+print("Prediction Accuracy {:.4f}".format((accuracy_count/output_labels.shape[0])*100))
 '''
 Meeting Notes - 09/03/2021
 For training node activiation, for each feature F(1) -F(N),
