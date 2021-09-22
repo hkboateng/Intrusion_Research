@@ -24,7 +24,7 @@ from sklearn.feature_extraction.text import CountVectorizer
 from sklearn.model_selection import train_test_split
 
 def calculateFITSAnomaly(train_distributions, test_activations):
-    anomaly_threshold = np.float64(0.5)
+    anomaly_threshold = np.float64(0.95)
     
     lognormal = []
     lognormal_count = 0
@@ -75,10 +75,14 @@ def calculateFITSAnomaly(train_distributions, test_activations):
             else:
                 print("Not Anomaly.. distribution: {}".format(dist_name))
         elif dist_name == 'triang':
-            peak_val = np.mean(test)
-            max_val = np.amax(test)
-            min_val = np.amin(test)
-            f_fxn = (peak_val - min_val)/(max_val - min_val)
+            max_val = data['Min']
+            min_val = data['Max']
+            compare_list = (min_val < test) & (test < max_val)
+            if np.float64(sum(compare_list)/moni_width) < anomaly_threshold:
+                defect_count += 1
+                print("Anomaly.. distribution: {}".format(dist_name))
+            else:
+                print("Not Anomaly.. distribution: {}".format(dist_name))                
         else:
             total_sum = ((train_mean - (degree_of_freedom * tr_std)) < test) & (test < (train_mean + (degree_of_freedom * tr_std)))
             if np.float64(sum(total_sum)/moni_width) < anomaly_threshold:
@@ -271,18 +275,18 @@ def generate_class_model(dataset_df,individual_model=False, training_mode= True,
             print("-"*10,">  Saving Normalizer, Label Encoder and OneHotEncoder")
             save_train_preprocessing_paramters('all_filtered.joblib', hotEncoder, normalizer, labelEncoder )
             print("-"*10,">Saving Normalizer and OneHotEncoder complete")
-            # model = loadDNNModel("models/model_all_filtered")
-            model = anomaly_model(processed_dataset.shape[1])
-            model.fit(processed_dataset,processed_labels,epochs=epochs)
-            print("-"*10,">Saving Trained Model")
-            saveDNNModel(model, "models/model_all_filtered")
-            print("-"*10,">Trained model saved")
+            model = loadDNNModel("models/model_all_filtered")
+            # model = anomaly_model(processed_dataset.shape[1])
+            # model.fit(processed_dataset,processed_labels,epochs=epochs)
+            # print("-"*10,">Saving Trained Model")
+            # saveDNNModel(model, "models/model_all_filtered")
+            # print("-"*10,">Trained model saved")
             print("-"*10,">Generating Monitoring node distributions","-"*10)
 
             monitoring_node = get_monitoring_node(model, node=monitoring_node)
             train_node = monitoring_node(processed_dataset)
 
-            train_distributions = method_stats(train_node.numpy())
+            train_distributions = method_stats(train_node.numpy().transpose())
             save_data("distributions",'train_distributions.joblib', train_distributions)
             return train_distributions
         else:
@@ -332,8 +336,10 @@ train_df = train_data
 test_df = test_data
 train_labels = train_data.iloc[:,41]
 test_labels = test_data.iloc[:,41]
+
 X_train, y_train, X_test, y_test = train_test_split(train_df,train_labels, train_size=0.35, random_state=42)
 monitoring_node = "softmax"
+
 
 num_classes = len(list(set(train_labels)))
 

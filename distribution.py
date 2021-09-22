@@ -100,7 +100,7 @@ def calculate_dis_props(dist_data, distribution):
         (hence the term log-normal).
         '''
         min_val = np.min(dist_data)
-        small_val = 1e-10
+        small_val = 1e-5
         epsilon = np.abs(min_val) + small_val
         dist_data = dist_data + epsilon
         mean_x = np.mean(np.log(dist_data))
@@ -162,7 +162,7 @@ def calculate_dis_props(dist_data, distribution):
 dist_names = ['norm', 'lognorm','uniform','triang']
 #dist_names = ['lognorm','triang','norm','chi2','invgauss','uniform','gamma','expon','lognorm','powerlaw']
 def  method_stats(dist_data):
-    dist_data = dist_data.transpose()
+    # dist_data = dist_data.transpose()
     distribution = pd.DataFrame(columns=('Type of Distribution','Mean','Standard Deviation','Epsilon','Max','Min','Peak'))
     for i in dist_data:
         distribution = calculate_dis_props(i, distribution)
@@ -193,19 +193,23 @@ def dist_function(dist_list):
 # dist_function(distribution_names)
 
 def distribution_test():
-    distributions = ['lognormal']
-    num_samples = 20
+    distributions = ['lognorm']
+    num_samples = 4
     sample_list = []
-    half_len = int(num_samples/2)
+    half_len = int(num_samples)
     for i in range(half_len):
         data = stats.lognorm.rvs(0.158, size=10000)
         # data = np.reshape(data, (-1,1))
         # distribution = method_stats(data)
         sample_list.append(data)
-    sample_list = np.asarray(sample_list)    
-    distribution = method_stats(sample_list)
+    sample_list = np.asarray(sample_list)  
+    half_leng = int(num_samples/2)
+    sample_list_2 = sample_list[half_leng:num_samples]
+    sample_list_1 = sample_list[:half_leng]
+    distribution = method_stats(sample_list_1)
     return sample_list, distribution
-sample_list, distribution = distribution_test()
+#sample_list, distribution = distribution_test()
+
 '''
 Notes:
     1) Do with a window of points instead of a single point. 
