@@ -23,6 +23,23 @@ from sklearn.feature_extraction.text import CountVectorizer
 
 from sklearn.model_selection import train_test_split
 
+def determine_triang(sample_data, stats_data):
+    max_val = stats_data['Max']  # b
+    min_val = stats_data['Min']  # a
+    peak_val = stats_data['Peak'] # c
+    t = 2/(max_val-min_val)
+    r = (2*(sample_data - min_val))/((max_val-min_val)(peak_val-min_val))
+    x = (2*(max_val-sample_data))/((max_val-min_val)(max_val-peak_val))
+    if sample_data < min_val and max_val > sample_data:
+        return False
+    else:
+        if peak_val == sample_data:
+            t = 2/(max_val-min_val)
+        elif min_val <= sample_data and sample_data < peak_val:
+            x = (2*(max_val-sample_data))/((max_val-min_val)(max_val-peak_val))
+        elif peak_val < sample_data and sample_data <= max_val:
+            r = (2*(sample_data - min_val))/((max_val-min_val)(peak_val-min_val))
+    
 def calculateFITSAnomaly(train_distributions, test_activations):
     anomaly_threshold = np.float64(0.5)
     
@@ -54,7 +71,7 @@ def calculateFITSAnomaly(train_distributions, test_activations):
             
             #print('Min val: {0} epsilon {1} Count Nan {2}'.format(np.min(test), norm_data, sum(np.isinf(normalized_data_log))))
 
-            total = np.sum(((train_mean - (degree_of_freedom * tr_std)) < normalized_data_log) & (normalized_data_log < (train_mean + (degree_of_freedom * tr_std))))
+            total = np.sum(((train_mean - (degree_of_freedom * tr_std)) < norm_data_z) & (norm_data_z < (train_mean + (degree_of_freedom * tr_std))))
 
             if np.float64(total/moni_width) < anomaly_threshold:
                 defect_count +=1
@@ -75,14 +92,32 @@ def calculateFITSAnomaly(train_distributions, test_activations):
             else:
                 print("Not Anomaly.. distribution: {}".format(dist_name))
         elif dist_name == 'triang':
-            max_val = data['Min']
-            min_val = data['Max']
-            compare_list = (min_val < test) & (test < max_val)
+            max_val = data['Max']  # b
+            min_val = data['Min']  # a
+            peak_val = data['Peak']
+            # peak_val = # Calc
+            '''
+            Use PDF equations and if Prob is > 50% then is Triang else anomaly
+            '''
+            t = 2/(max_val-min_val)
+            r = (2*(test - min_val))/((max_val-min_val)(peak_val-min_val))
+            x = (2*(max_val-test))/((max_val-min_val)(max_val-peak_val))
+            compare_list = ((min_val < test) & (test < max_val)) and test == t
+                
             if np.float64(sum(compare_list)/moni_width) < anomaly_threshold:
                 defect_count += 1
                 print("Anomaly.. distribution: {}".format(dist_name))
             else:
-                print("Not Anomaly.. distribution: {}".format(dist_name))                
+                print("Not Anomaly.. distribution: {}".format(dist_name))  
+        elif dist_name == 'expon':
+            lamda = data['Lambda']
+            expon_calc = 1 - np.exp(-(lamda * test))
+            total_sum = expon_calc >= 0
+            if np.float64(sum(total_sum)/moni_width) < anomaly_threshold:
+                defect_count += 1
+                print("Anomaly.. distribution: {}".format(dist_name))
+            else:
+                print("Not Anomaly.. distribution: {}".format(dist_name)) 
         else:
             total_sum = ((train_mean - (degree_of_freedom * tr_std)) < test) & (test < (train_mean + (degree_of_freedom * tr_std)))
             if np.float64(sum(total_sum)/moni_width) < anomaly_threshold:
@@ -335,17 +370,32 @@ def gennerate_confusion_matrix(dataset,parameters_filename, model_name):
 
 def pathname(pathname):
     return os.path.dirname(os.path.join(os.getcwd(),pathname,pathname))
-    
+ 
+def display_datainformation():
+    print("-"*15,"Train Dataset","-"*15)
+    train_class_distribution = train_data.iloc[:,41].value_counts()
+    sorted_yi = np.argsort(-train_class_distribution.values)
+    # now for each i of the sorted datapoints we are printing the number of datapoints and the percetange
+    for i in sorted_yi:
+        print('Number of data points in class', i+1, ':',train_class_distribution[i], '(', np.round((train_class_distribution.values[i]/len(train_data)*100), 3), '%)')
+    print("-*-"*30)
+    print("-"*15,"Test Dataset","-"*15)
+    test_class_distribution = test_df.iloc[:,41].value_counts()
+    sorted_yi = np.argsort(-test_class_distribution.values)
+    # now for each i of the sorted datapoints we are printing the number of datapoints and the percetange
+    for i in range(len(test_class_distribution)):
+        print('Number of data points in class', i+1, ':',test_class_distribution[i], '(', np.round((test_class_distribution.values[i]/len(test_df)*100), 3), '%)')
+
+
 train_data=pd.read_csv('nsl-kdd/KDDTrain+.txt', sep = ',', error_bad_lines=False, header=None)
 test_data=pd.read_csv('nsl-kdd/KDDTest+.txt', sep = ',', error_bad_lines=False, header=None)
 train_df = train_data
 test_df = test_data
 train_labels = train_data.iloc[:,41]
 test_labels = test_data.iloc[:,41]
-
+train_class_distribution = train_data.iloc[:,41].value_counts()
+test_class_distribution = test_df.iloc[:,41].value_counts()
 #X_train, y_train, X_test, y_test = train_test_split(train_df,train_labels, train_size=0.35, random_state=42)
-monitoring_node = "softmax"
-
 
 num_classes = len(list(set(train_labels)))
 
@@ -360,22 +410,22 @@ unique_vals_test_train = list(set(unique_test_labels)-set(unique_train_labels))
 test_data_filter = test_df.loc[test_df.iloc[:,41].isin(unique_vals_test_train)]
 individual_model = False
 training_mode = False
-
+#display_datainformation()
 #train_distributions = generate_class_model(X_train, individual_model, epochs=20,monitoring_node=monitoring_node)
 
 
-train_df_protocol_types = list(set(train_df.iloc[:,1]))
-train_df_services = list(set(train_df.iloc[:,2]))
-train_df_flag = list(set(train_df.iloc[:,3]))
+# train_df_protocol_types = list(set(train_df.iloc[:,1]))
+# train_df_services = list(set(train_df.iloc[:,2]))
+# train_df_flag = list(set(train_df.iloc[:,3]))
 
-one_hot_protocol = CountVectorizer(vocabulary=train_df_protocol_types, binary=True)
-one_hot_services = CountVectorizer(vocabulary=train_df_services, binary=True)
-one_hot_flag = CountVectorizer(vocabulary=train_df_flag, binary=True)
+# one_hot_protocol = CountVectorizer(vocabulary=train_df_protocol_types, binary=True)
+# one_hot_services = CountVectorizer(vocabulary=train_df_services, binary=True)
+# one_hot_flag = CountVectorizer(vocabulary=train_df_flag, binary=True)
 
-train_df_protocol_types_onehot = one_hot_protocol.fit_transform(train_df.iloc[:,1].values)
-train_df_services_onehot = one_hot_services.fit_transform(train_df.iloc[:,2].values)
-train_df_flag_onehot = one_hot_flag.fit_transform(train_df.iloc[:,3].values)
-
+# train_df_protocol_types_onehot = one_hot_protocol.fit_transform(train_df.iloc[:,1].values)
+# train_df_services_onehot = one_hot_services.fit_transform(train_df.iloc[:,2].values)
+# train_df_flag_onehot = one_hot_flag.fit_transform(train_df.iloc[:,3].values)
+monitoring_node = "softmax"
 train_distributions = generate_class_model(train_df, individual_model, epochs=1,monitoring_node=monitoring_node)
 
 
